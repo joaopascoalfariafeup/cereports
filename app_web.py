@@ -164,22 +164,6 @@ def _format_model_cost(provider: str) -> str:
     return ""
 
 
-def _extrair_custo_estimado_valor(log_path: Path) -> float:
-    try:
-        txt = log_path.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return 0.0
-    matches = re.findall(r"Custo estimado:\s*\$([0-9]+(?:\.[0-9]+)?)", txt)
-    if not matches:
-        return 0.0
-    total = 0.0
-    for m in matches:
-        try:
-            total += float(m)
-        except ValueError:
-            continue
-    return total
-
 
 # ---------------------------------------------------------------------------
 # Helpers: formatação e UI
@@ -344,7 +328,7 @@ def _secure_headers(resp: Response):
 # Layout / CSS
 # ---------------------------------------------------------------------------
 
-_STEPPER_LABELS = ["Seleção", "Geração", "Parecer"]
+_STEPPER_LABELS = ["Seleção", "Geração", "Revisão"]
 
 
 def _stepper_html(step: int, logout_url: str = "") -> str:
@@ -1553,19 +1537,16 @@ def progress(job_id: str):
     """
 
     if job.done and job.ok:
-        custo = _extrair_custo_estimado_valor(job.log_path) if job.log_path.exists() else 0.0
-        custo_html = f'<p class="muted" style="margin:6px 0 0;">Custo LLM estimado: ${custo:.4f}</p>' if custo > 0 else ""
         body += f"""
         <div class="card">
           <div class="navbar">
             <div class="navbar-left">
-              <a class="btn" href="{url_for('preview', job_id=job_id)}">Ver parecer</a>
+              <a class="btn" href="{url_for('preview', job_id=job_id)}">Rever parecer</a>
             </div>
             <div class="navbar-right">
               <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar (.zip)</a>
             </div>
           </div>
-          {custo_html}
         </div>
         """
     elif job.done:
