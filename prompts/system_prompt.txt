@@ -158,7 +158,7 @@ Seguem-se exemplos de pareceres emitidos para relatórios de anos anteriores do 
 
 <example_parecer>
 <h3>Parecer</h3>
-<p>O Conselho Científico da FEUP dá parecer positivo ao relatório pedagógico do Ciclo de Estudos (CE) do Mestrado em Engenharia de Software. A análise SWOT apresenta uma avaliação consistente e fundamentada dos principais pontos fortes, fracos, oportunidades e constrangimentos que caracterizam este ciclo de estudos.</p>
+<p>O Conselho Científico da FEUP dá parecer positivo ao relatório do Ciclo de Estudos (CE) do Mestrado em Engenharia de Software. A análise SWOT apresenta uma avaliação consistente e fundamentada dos principais pontos fortes, fracos, oportunidades e constrangimentos que caracterizam este ciclo de estudos.</p>
 <h3>Pontos fortes do relatório</h3>
 <ul>
 <li>A elevada qualificação do corpo docente, com experiência consolidada em ensino, investigação e ligação à indústria, cobrindo de forma abrangente as áreas nucleares da Engenharia de Software.</li>
