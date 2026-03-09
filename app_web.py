@@ -1344,7 +1344,7 @@ def ces():
 
     def _ce_permitido(ce: dict) -> tuple[bool, str]:
         if ce["cur_id"] in _director_ids:
-            return False, "É diretor — não deve emitir parecer"
+            return True, ""  # diretor pode solicitar auto-avaliação
         if not _has_cargos:
             return True, ""  # sem cargos identificados: não restringir
         if ce["tipo"] in _permit_tipos or ce["cur_id"] in _ca_ids:
@@ -1371,7 +1371,7 @@ def ces():
         artigo_dir = "da" if s_dir.startswith("L.") or n_dir.startswith("licenciatura") else "do"
         label_dir = _esc(d["sigla"] or d["nome"] or d["cur_id"])
         cargos_items.append(
-            f'<span class="status-err">&#9888; Diretor {artigo_dir} {label_dir} — não deve emitir parecer</span>'
+            f'Diretor {artigo_dir} {label_dir} — pode solicitar auto-avaliação'
         )
 
     cargos_li_html = ""
@@ -1586,8 +1586,9 @@ def start_job():
             ces_pub = listar_ces_publicos()
             ce_tipo = next((c["tipo"] for c in ces_pub if c["cur_id"] == cur_id), None)
             permitido = (
-                cur_id not in director_ids
-                and (ce_tipo in permit_tipos or cur_id in ca_ids)
+                cur_id in director_ids  # diretor pode solicitar auto-avaliação
+                or ce_tipo in permit_tipos
+                or cur_id in ca_ids
             )
             if not permitido:
                 return _page("Sem permissão", f"""
