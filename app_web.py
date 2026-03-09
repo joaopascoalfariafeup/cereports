@@ -860,30 +860,19 @@ function setupCeYearLoader() {
       .catch(function() { populateAnos(getFallbackAnos()); });
   }
 
-  // Aviso de conflito de diretor
-  const form = ceSelect.closest('form');
-  const directorIds = (function() {
-    try { return JSON.parse((form && form.dataset.directorIds) || '[]'); } catch(e) { return []; }
-  })();
-  const dirWarning = _byId('director-warning');
-  function updateDirectorWarning(curId) {
-    if (dirWarning) dirWarning.style.display = (directorIds.length && directorIds.includes(curId)) ? '' : 'none';
-  }
-
-  ceSelect.addEventListener('change', function() {
+  const curIdHidden = _byId('cur_id_hidden');
+  function onCeChange() {
     const opt = ceSelect.options[ceSelect.selectedIndex];
     const curId = opt ? (opt.dataset.curId || '') : '';
+    if (curIdHidden) curIdHidden.value = curId;
     loadYears(curId);
-    updateDirectorWarning(curId);
-  });
+  }
 
+  ceSelect.addEventListener('change', onCeChange);
   anoSelect.addEventListener('change', syncPvId);
 
   // Carregar imediatamente ao entrar na página
-  const selOpt = ceSelect.options[ceSelect.selectedIndex];
-  const initCurId = (selOpt && selOpt.dataset.curId) ? selOpt.dataset.curId : '';
-  loadYears(initCurId);
-  updateDirectorWarning(initCurId);
+  onCeChange();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1342,7 +1331,25 @@ def ces():
     impersonated = _get_impersonated_code()
     eff_code = _effective_codigo(sess)
     cargos = obter_cargos_docente(sess, eff_code)
-    director_cur_ids_json = _esc(json.dumps([d["cur_id"] for d in cargos["director_cursos"]]))
+
+    # Permissões por tipo e por cur_id
+    _permit_tipos: set[str] = set()
+    if cargos["is_cp"]:
+        _permit_tipos.update({"L", "M"})
+    if cargos["is_cc"]:
+        _permit_tipos.update({"L", "M", "D"})
+    _ca_ids = {c["cur_id"] for c in cargos["cac_cursos"]}
+    _director_ids = {d["cur_id"] for d in cargos["director_cursos"]}
+    _has_cargos = bool(_permit_tipos or _ca_ids)
+
+    def _ce_permitido(ce: dict) -> tuple[bool, str]:
+        if ce["cur_id"] in _director_ids:
+            return False, "É diretor — não deve emitir parecer"
+        if not _has_cargos:
+            return True, ""  # sem cargos identificados: não restringir
+        if ce["tipo"] in _permit_tipos or ce["cur_id"] in _ca_ids:
+            return True, ""
+        return False, "Sem cargo que permita emitir parecer para este CE"
 
     nome_docente = cargos.get("nome", "") or eff_code
     docente_label = f'Docente: {_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else ""
@@ -1415,17 +1422,23 @@ def ces():
                 continue
             optgroups += f'<optgroup label="{_TIPO_LABELS[tipo]}">'
             for ce in ces_tipo:
-                sel = " selected" if ce["nome"] == last_ce_nome else ""
+                permitido, motivo = _ce_permitido(ce)
+                disabled_attr = "" if permitido else f' disabled title="{_esc(motivo)}"'
+                sel = " selected" if ce["nome"] == last_ce_nome and permitido else ""
                 optgroups += (
-                    f'<option value="{_esc(ce["nome"])}" data-cur-id="{_esc(ce["cur_id"])}"{sel}>'
+                    f'<option value="{_esc(ce["nome"])}" data-cur-id="{_esc(ce["cur_id"])}"{sel}{disabled_attr}>'
                     f'{_esc(ce["nome"])}</option>'
                 )
             optgroups += "</optgroup>"
+        # Se o último CE selecionado agora está desativado, limpar pré-seleção
+        last_valid = last_ce_nome if any(
+            ce["nome"] == last_ce_nome and _ce_permitido(ce)[0] for ce in ces_list
+        ) else ""
         ce_field_html = f"""
         <div class="form-row-inline">
           <label for="ce_nome">Ciclo de estudos:</label>
           <select name="ce_nome" id="ce_nome" required style="max-width:560px;">
-            <option value="" disabled{'' if last_ce_nome else ' selected'}>Selecione um ciclo de estudos...</option>
+            <option value="" disabled{'' if last_valid else ' selected'}>Selecione um ciclo de estudos...</option>
             {optgroups}
           </select>
         </div>"""
@@ -1444,14 +1457,11 @@ def ces():
       {impersonate_html}
       {cargos_html}
       <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data"
-            style="margin-top:4px;" data-director-ids="{director_cur_ids_json}">
+            style="margin-top:4px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <input type="hidden" name="cur_id" id="cur_id_hidden">
 
         {ce_field_html}
-
-        <p class="status-err" id="director-warning" style="display:none;margin:4px 0 0 160px;font-size:0.9em;">
-          &#9888; É diretor deste curso — não deve emitir parecer.
-        </p>
 
         <div class="form-row-inline">
           <label for="ano_letivo">Ano letivo:</label>
@@ -1541,12 +1551,39 @@ def start_job():
         </div>"""), 503
 
     ce_nome = request.form.get("ce_nome", "").strip()
+    cur_id = request.form.get("cur_id", "").strip()
     ano_letivo = request.form.get("ano_letivo", "").strip()
     pv_id = request.form.get("pv_id", "").strip()
     llm_choice = request.form.get("llm_choice", "").strip()
 
     if not ce_nome:
         return redirect(url_for("ces"))
+
+    # Validação de permissões server-side
+    eff_code = _effective_codigo(sess)
+    if eff_code and cur_id:
+        cargos = obter_cargos_docente(sess, eff_code)
+        permit_tipos: set[str] = set()
+        if cargos["is_cp"]:
+            permit_tipos.update({"L", "M"})
+        if cargos["is_cc"]:
+            permit_tipos.update({"L", "M", "D"})
+        ca_ids = {c["cur_id"] for c in cargos["cac_cursos"]}
+        director_ids = {d["cur_id"] for d in cargos["director_cursos"]}
+        has_cargos = bool(permit_tipos or ca_ids)
+        if has_cargos:
+            ces_pub = listar_ces_publicos()
+            ce_tipo = next((c["tipo"] for c in ces_pub if c["cur_id"] == cur_id), None)
+            permitido = (
+                cur_id not in director_ids
+                and (ce_tipo in permit_tipos or cur_id in ca_ids)
+            )
+            if not permitido:
+                return _page("Sem permissão", f"""
+                <div class="card">
+                  <p class="status-err">Não tem permissão para emitir parecer para este ciclo de estudos.</p>
+                  <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar</a></p>
+                </div>"""), 403
 
     if not pv_id or not re.match(r'^\d+$', pv_id):
         return _page("Erro", f"""
