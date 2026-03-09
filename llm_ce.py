@@ -9,17 +9,17 @@ Função principal: analisar_relatorio_ce
 
 from __future__ import annotations
 
-import base64
-import io
 import json
 import os
 import random
 import re
+import secrets
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import anthropic
-from pypdf import PdfReader
 from openai import OpenAI
 
 from sigarra import load_env
@@ -73,12 +73,13 @@ def _garantir_api_key(provider: str) -> None:
     key_map = {"openai": "OPENAI_API_KEY", "iaedu": "IAEDU_API_KEY"}
     env_key = key_map.get(provider, "ANTHROPIC_API_KEY")
     if provider == "iaedu":
-        # iaedu usa IAEDU_API_KEY ou IAEDU_ENDPOINT
         key = os.environ.get("IAEDU_API_KEY", "").strip()
         endpoint = os.environ.get("IAEDU_ENDPOINT", "").strip()
-        if not key or not endpoint:
+        canal = os.environ.get("IAEDU_ID_CANAL", "").strip()
+        if not key or not endpoint or not canal:
             raise RuntimeError(
-                "IAEDU_API_KEY e IAEDU_ENDPOINT não configurados. Defina-os em .env."
+                "IAEDU_API_KEY, IAEDU_ENDPOINT e IAEDU_ID_CANAL são obrigatórios. "
+                "Defina-os em .env antes de iniciar o servidor."
             )
         return
     key = os.environ.get(env_key, "").strip()
@@ -88,18 +89,186 @@ def _garantir_api_key(provider: str) -> None:
         )
 
 
-def _pdf_to_text(pdf_bytes: bytes, max_pages: int = 50) -> str:
-    """Extrai texto de um PDF usando pypdf."""
+def _chamar_llm_iaedu_html(
+    relatorio_html: str, user_text: str, system: str, modelo: str,
+) -> dict:
+    """Chamada IAedu via multipart/form-data com SSE streaming.
+
+    A API IAedu não é OpenAI-compatible: usa POST multipart para um endpoint
+    específico, com autenticação via header x-api-key, e devolve SSE.
+    Variáveis de ambiente necessárias:
+      IAEDU_ENDPOINT, IAEDU_API_KEY, IAEDU_ID_CANAL
+    Opcionais:
+      IAEDU_THREAD_ID, IAEDU_USER_INFO, IAEDU_USER_ID, IAEDU_USER_CONTEXT
+    """
+    load_env()
+    endpoint = os.environ.get("IAEDU_ENDPOINT", "").strip()
+    api_key = os.environ.get("IAEDU_API_KEY", "").strip()
+    channel_id = os.environ.get("IAEDU_ID_CANAL", "").strip()
+    thread_id = os.environ.get("IAEDU_THREAD_ID", "").strip() or secrets.token_urlsafe(16)
+    user_info = os.environ.get("IAEDU_USER_INFO", "{}").strip() or "{}"
+    user_id = os.environ.get("IAEDU_USER_ID", "").strip()
+    user_context = os.environ.get("IAEDU_USER_CONTEXT", "").strip()
+
+    # Combinar system prompt + user text (IAedu recebe uma única mensagem)
+    full_message = f"{system.strip()}\n\n{user_text}\n\n## Conteúdo do relatório (HTML)\n\n{relatorio_html}"
+
+    boundary = f"----iaedu-{secrets.token_hex(8)}"
+
+    def _part(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    body_chunks = [
+        _part("channel_id", channel_id),
+        _part("thread_id", thread_id),
+        _part("user_info", user_info),
+        _part("message", full_message),
+    ]
+    if modelo:
+        body_chunks.append(_part("model", modelo))
+    if user_id:
+        body_chunks.append(_part("user_id", user_id))
+    if user_context:
+        body_chunks.append(_part("user_context", user_context))
+    body_chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    body = b"".join(body_chunks)
+
+    req = urllib.request.Request(
+        endpoint,
+        data=body,
+        headers={
+            "x-api-key": api_key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "Accept": "text/event-stream, application/json, text/plain, */*",
+        },
+        method="POST",
+    )
     try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        partes = []
-        for page in reader.pages[:max_pages]:
-            t = (page.extract_text() or "").strip()
-            if t:
-                partes.append(t)
-        return "\n\n".join(partes).strip() or "[sem texto extraível do PDF]"
-    except Exception as e:
-        return f"[erro ao extrair texto do PDF: {e}]"
+        resp_raw = urllib.request.urlopen(req, timeout=180)
+    except urllib.error.HTTPError as exc:
+        body_err = ""
+        try:
+            body_err = exc.read().decode("utf-8", errors="replace")[:800]
+        except Exception:
+            pass
+        raise urllib.error.HTTPError(
+            exc.url, exc.code,
+            f"{exc.reason}. Corpo: {body_err or '(vazio)'}",
+            exc.headers, None,
+        ) from exc
+
+    with resp_raw:
+        raw_text = resp_raw.read().decode("utf-8", errors="replace")
+
+    def _extrair_texto_json(v) -> str:
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            for k in ("text", "content", "delta", "message", "response",
+                      "output", "answer", "final_answer", "output_text", "result"):
+                if k in v:
+                    t = _extrair_texto_json(v[k])
+                    if t:
+                        return t
+            return ""
+        if isinstance(v, list):
+            return "".join(_extrair_texto_json(i) for i in v)
+        return ""
+
+    def _parse_sse_payloads(txt: str) -> list[str]:
+        payloads: list[str] = []
+        data_lines: list[str] = []
+        for raw_line in txt.splitlines():
+            line = raw_line.rstrip("\r")
+            if not line.strip():
+                if data_lines:
+                    payloads.append("\n".join(data_lines).strip())
+                    data_lines = []
+                continue
+            s = line.strip()
+            if s.startswith(":"):
+                continue
+            if s.startswith("data:"):
+                data_lines.append(s[5:].strip())
+        if data_lines:
+            payloads.append("\n".join(data_lines).strip())
+        return [p for p in payloads if p and p not in ("[DONE]", "__DONE__")]
+
+    def _extract_from_event_obj(obj: dict) -> tuple[str, str]:
+        if not isinstance(obj, dict):
+            return "", ""
+        tipo = str(obj.get("type", "")).strip().lower()
+        conteudo = obj.get("content")
+        if tipo == "token" and isinstance(conteudo, str):
+            return conteudo, ""
+        if tipo == "message":
+            if isinstance(conteudo, str):
+                return "", conteudo
+            if isinstance(conteudo, dict):
+                txt = _extrair_texto_json(conteudo)
+                if txt:
+                    return "", txt
+        if isinstance(conteudo, str) and tipo not in ("start", "done"):
+            return conteudo, ""
+        return "", ""
+
+    chunks: list[str] = []
+    full_message_text = ""
+
+    for payload in _parse_sse_payloads(raw_text):
+        try:
+            obj = json.loads(payload)
+            tok, full = _extract_from_event_obj(obj)
+            if tok:
+                chunks.append(tok)
+            if full:
+                full_message_text = full
+        except json.JSONDecodeError:
+            chunks.append(payload)
+
+    # Fallback: ndjson sem prefixo "data:"
+    if not chunks and not full_message_text:
+        for line in raw_text.splitlines():
+            s = line.strip()
+            if not s or not s.startswith("{"):
+                continue
+            try:
+                obj = json.loads(s)
+            except json.JSONDecodeError:
+                continue
+            tok, full = _extract_from_event_obj(obj)
+            if tok:
+                chunks.append(tok)
+            if full:
+                full_message_text = full
+
+    if full_message_text:
+        texto = full_message_text.strip()
+    elif chunks:
+        texto = "".join(chunks).strip()
+    else:
+        try:
+            obj = json.loads(raw_text)
+            texto = _extrair_texto_json(obj).strip()
+        except json.JSONDecodeError:
+            texto = raw_text.strip()
+
+    if not texto:
+        snippet = re.sub(r"\s+", " ", raw_text).strip()[:700]
+        raise ValueError(
+            f"IAedu devolveu resposta sem texto útil. Snippet: {snippet or '(vazio)'}"
+        )
+
+    return {
+        "text": texto,
+        "model": modelo or os.environ.get("IAEDU_MODELO_ANALISE", "iaedu") or "iaedu",
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
 
 
 def _carregar_precos() -> dict[str, tuple[float, float]]:
@@ -240,10 +409,8 @@ def analisar_relatorio_ce(
                     relatorio_html, user_text, system, modelo, max_tokens
                 )
             elif provider == "iaedu":
-                base_url = os.environ.get("IAEDU_ENDPOINT", "").strip() or None
-                resp = _chamar_llm_openai_html(
-                    relatorio_html, user_text, system, modelo, max_tokens,
-                    base_url=base_url, api_key_env="IAEDU_API_KEY",
+                resp = _chamar_llm_iaedu_html(
+                    relatorio_html, user_text, system, modelo,
                 )
             else:  # openai
                 base_url = os.environ.get("OPENAI_BASE_URL", "").strip() or None
