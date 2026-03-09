@@ -1355,7 +1355,10 @@ def ces():
         cargos_items.append("Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
     for c in cargos["cac_cursos"]:
         label_curso = _esc(c["sigla"] or c["nome"])
-        cargos_items.append(f'Comissão de Acompanhamento do {label_curso} — pode emitir parecer de CA')
+        # artigo: Licenciatura → "da", Mestrado/Doutoramento → "do"
+        s, n = (c["sigla"] or "").upper(), (c["nome"] or "").lower()
+        artigo = "da" if s.startswith("L.") or n.startswith("licenciatura") else "do"
+        cargos_items.append(f'Comissão de Acompanhamento {artigo} {label_curso} — pode emitir parecer de CA')
     for cur_id in cargos["director_cur_ids"]:
         nome_dir = _ces_by_id.get(cur_id, cur_id)
         cargos_items.append(
