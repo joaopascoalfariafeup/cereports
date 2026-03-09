@@ -4,4 +4,3 @@ waitress
 beautifulsoup4
 anthropic
 openai
-pypdf
