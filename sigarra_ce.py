@@ -7,9 +7,89 @@ Funções específicas para listar CEs e obter relatórios pedagógicos.
 from __future__ import annotations
 
 import re
+import time
+import urllib.request as _req
 from bs4 import BeautifulSoup
 
 from sigarra import SigarraSession, SIGARRA_BASE
+
+
+# ---------------------------------------------------------------------------
+# Lista pública de CEs (sem autenticação) — página oficial SIGARRA/FEUP
+# ---------------------------------------------------------------------------
+
+SIGARRA_CUR_INICIO_URL = "https://sigarra.up.pt/feup/pt/cur_geral.cur_inicio"
+
+_CES_PUBLICOS_CACHE: list[dict] = []
+_CES_PUBLICOS_CACHE_TS: float = 0.0
+_CES_PUBLICOS_CACHE_TTL = 3600  # 1 hora
+
+
+def listar_ces_publicos() -> list[dict]:
+    """Obtém lista de CEs da página pública do SIGARRA (sem autenticação).
+
+    Faz scraping de https://sigarra.up.pt/feup/pt/cur_geral.cur_inicio e
+    extrai as listas de Licenciaturas (L_a), Mestrados (M_a) e
+    Doutoramentos (D_a).
+
+    Returns:
+        Lista de dicts com campos: cur_id (str), nome (str), tipo ('L'|'M'|'D').
+        Em caso de falha de rede devolve lista vazia.
+        Resultado em cache durante 1 hora.
+    """
+    global _CES_PUBLICOS_CACHE, _CES_PUBLICOS_CACHE_TS
+
+    now = time.time()
+    if _CES_PUBLICOS_CACHE and (now - _CES_PUBLICOS_CACHE_TS) < _CES_PUBLICOS_CACHE_TTL:
+        return _CES_PUBLICOS_CACHE
+
+    try:
+        req = _req.Request(
+            SIGARRA_CUR_INICIO_URL,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; CEReports/1.0)"},
+        )
+        resp = _req.urlopen(req, timeout=15)
+        charset = resp.headers.get_content_charset() or "utf-8"
+        html_str = resp.read().decode(charset, errors="replace")
+    except Exception:
+        return _CES_PUBLICOS_CACHE  # devolve cache antigo se tiver, ou []
+
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    # Cada tipo tem uma <ul id="X_a"> com <li><a href="...pv_curso_id=NNN">Nome</a>...
+    TIPOS = [
+        ("L", "L_a"),
+        ("M", "M_a"),
+        ("D", "D_a"),
+    ]
+
+    resultado: list[dict] = []
+    for tipo, ul_id in TIPOS:
+        ul = soup.find("ul", id=ul_id)
+        if not ul:
+            continue
+        for li in ul.find_all("li"):
+            a = li.find("a")
+            if not a:
+                continue
+            href = a.get("href", "")
+            m = re.search(r"pv_curso_id=(\d+)", href)
+            if not m:
+                continue
+            nome = a.get_text(strip=True)
+            if not nome:
+                continue
+            resultado.append({
+                "cur_id": m.group(1),
+                "nome": nome,
+                "tipo": tipo,
+            })
+
+    if resultado:
+        _CES_PUBLICOS_CACHE = resultado
+        _CES_PUBLICOS_CACHE_TS = now
+
+    return resultado
 
 
 # ---------------------------------------------------------------------------

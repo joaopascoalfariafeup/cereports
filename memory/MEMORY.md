@@ -11,7 +11,7 @@ URL público: https://ce.uc-reports.com (cloudflared tunnel, porta 5001)
 - `ce_core.py` — pipeline: PDF bytes → LLM → preview_payload dict
 - `llm_ce.py` — chamadas LLM (Anthropic PDF nativo / OpenAI-compat text extraction)
 - `sigarra.py` — SigarraSession (auth SIGARRA, idêntico ao UCReports)
-- `sigarra_ce.py` — stubs para listar CEs e fetch PDF do SIGARRA (a implementar)
+- `sigarra_ce.py` — `listar_ces_publicos()` (scraping público, sem auth, cache 1h) + stub `extrair_relatorio_ce_pdf()`
 - `logger.py` — AuditoriaLogger (idêntico ao UCReports)
 - `prompts/system_prompt.txt` — system prompt para geração de pareceres (HTML, ~4000 chars)
 - `.env.public` — configuração pública versionada; `.env` — segredos (não versionado)

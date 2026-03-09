@@ -32,6 +32,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
+from sigarra_ce import listar_ces_publicos
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -1104,17 +1105,46 @@ def ces():
         for a in anos
     )
 
+    # --- Dropdown de CEs a partir da página pública do SIGARRA ---
+    ces_list = listar_ces_publicos()
+    last_ce_nome = flask_session.get("last_ce_nome", "")
+    if ces_list:
+        _TIPO_LABELS = {"L": "Licenciaturas", "M": "Mestrados", "D": "Doutoramentos"}
+        optgroups = ""
+        for tipo in ("L", "M", "D"):
+            ces_tipo = [c for c in ces_list if c["tipo"] == tipo]
+            if not ces_tipo:
+                continue
+            optgroups += f'<optgroup label="{_TIPO_LABELS[tipo]}">'
+            for ce in ces_tipo:
+                sel = " selected" if ce["nome"] == last_ce_nome else ""
+                optgroups += f'<option value="{_esc(ce["nome"])}"{sel}>{_esc(ce["nome"])}</option>'
+            optgroups += "</optgroup>"
+        ce_field_html = f"""
+        <div class="form-row-inline">
+          <label for="ce_nome">Ciclo de estudos:</label>
+          <select name="ce_nome" id="ce_nome" required style="max-width:560px;">
+            <option value="" disabled{'' if last_ce_nome else ' selected'}>Selecione um ciclo de estudos...</option>
+            {optgroups}
+          </select>
+        </div>"""
+    else:
+        # Fallback: input de texto se o SIGARRA não estiver acessível
+        ce_field_html = f"""
+        <div class="form-row-inline">
+          <label for="ce_nome">Ciclo de estudos:</label>
+          <input type="text" name="ce_nome" id="ce_nome"
+                 placeholder="ex: Mestrado em Engenharia de Software"
+                 value="{_esc(last_ce_nome)}" style="max-width:500px;" required>
+        </div>"""
+
     body = f"""
     <div class="card">
       <h3>Gerar parecer sobre relatório pedagógico de CE</h3>
       <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data" style="margin-top:4px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
 
-        <div class="form-row-inline">
-          <label for="ce_nome">Ciclo de estudos:</label>
-          <input type="text" name="ce_nome" id="ce_nome" placeholder="ex: Mestrado em Engenharia de Software"
-                 value="{_esc(flask_session.get('last_ce_nome', ''))}" style="max-width:500px;" required>
-        </div>
+        {ce_field_html}
 
         <div class="form-row-inline">
           <label for="ano_letivo">Ano letivo:</label>
