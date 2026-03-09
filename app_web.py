@@ -1167,21 +1167,9 @@ def privacidade():
 
       <p class="muted">
         O código-fonte desta ferramenta é público e auditável em
-        <a href="https://github.com/joaopascoalfariafeup/ucreports" target="_blank" rel="noopener">github.com/joaopascoalfariafeup/ucreports</a>.
-      </p>
-
-      
-      <h4>Utilização de modelos de linguagem (LLM)</h4>
-      <p>
-        O parecer é gerado por um LLM (Anthropic Claude ou IAedu/GPT-4o). As garantias
-        de privacidade dependem do fornecedor selecionado. O parecer gerado é apresentado
-        ao utilizador para revisão antes de qualquer utilização.
-      </p>
-      <p class="muted">
-        O código-fonte desta ferramenta é público em
         <a href="https://github.com/joaopascoalfariafeup/cereports" target="_blank" rel="noopener">github.com/joaopascoalfariafeup/cereports</a>.
       </p>
-      <p class="muted"><a href="{url_for('login')}">Voltar ao login</a></p>
+
     </div>
     """
     return _page("Política de privacidade", body)
