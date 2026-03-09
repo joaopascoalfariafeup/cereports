@@ -374,19 +374,44 @@ def listar_relatorios_ce(
     soup = BeautifulSoup(html_str, "html.parser")
     resultado: list[dict] = []
 
-    for a in soup.find_all("a", href=re.compile(r"relcur_geral\.proc_edit\?pv_id=")):
+    def _extrair_ano(texto: str) -> str | None:
+        """Extrai ano letivo de início do texto do link (várias formatações)."""
+        # "-- 2024" ou "-- 2023/24"
+        m = re.search(r"--\s*(\d{4})(?:[/\-]\d{2,4})?\s*$", texto)
+        if m:
+            return m.group(1)
+        # "2024/25" ou "2023-2024" isolado
+        m = re.search(r"\b(20\d{2})[/\-]\d{2,4}\b", texto)
+        if m:
+            return m.group(1)
+        # Ano isolado no final, ex: "Relatório 2024"
+        m = re.search(r"\b(20\d{2})\s*$", texto)
+        if m:
+            return m.group(1)
+        return None
+
+    # Links do tipo relcur_geral.proc_edit?pv_id=NNN (licenciaturas/mestrados)
+    for a in soup.find_all("a", href=re.compile(r"relcur_geral\.proc_edit\?pv_id=", re.I)):
         href = a.get("href", "")
-        m_id = re.search(r"pv_id=(\d+)", href)
+        m_id = re.search(r"pv_id=(\d+)", href, re.I)
         if not m_id:
             continue
-        texto = a.get_text(strip=True)
-        m_ano = re.search(r"--\s*(\d{4})\s*$", texto)
-        if not m_ano:
+        ano = _extrair_ano(a.get_text(strip=True))
+        if not ano:
             continue
-        resultado.append({
-            "pv_id": m_id.group(1),
-            "ano": m_ano.group(1),
-        })
+        resultado.append({"pv_id": m_id.group(1), "ano": ano})
+
+    # Links do tipo cur_geral.rel_cur_view?pv_cur_id=NNN&pv_ano_letivo=YYYY (doutoramentos)
+    if not resultado:
+        for a in soup.find_all("a", href=re.compile(r"cur_geral\.rel_cur_view", re.I)):
+            href = a.get("href", "")
+            m_cid = re.search(r"pv_cur_id=(\d+)", href, re.I)
+            m_ano_url = re.search(r"pv_ano_letivo=(\d{4})", href, re.I)
+            if not m_cid or not m_ano_url:
+                continue
+            ano = m_ano_url.group(1)
+            # pv_id sintético: "D:<cur_id>:<ano>" — interpretado em obter_relatorio_ce_html
+            resultado.append({"pv_id": f"D:{m_cid.group(1)}:{ano}", "ano": ano})
 
     # Mais recentes primeiro
     resultado.sort(key=lambda x: x["ano"], reverse=True)
