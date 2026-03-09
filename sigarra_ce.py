@@ -442,6 +442,14 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
 
     soup = BeautifulSoup(html_str, "html.parser")
 
+    # 0. Converter inputs de texto com value em spans legíveis pelo LLM,
+    #    antes de os remover no passo seguinte.
+    for inp in soup.find_all("input", {"type": "text"}):
+        val = (inp.get("value") or "").strip()
+        span = soup.new_tag("span")
+        span.string = val if val else "—"
+        inp.replace_with(span)
+
     # 1. Remover tags indesejadas (e o seu conteúdo)
     for tag in soup.find_all(_HTML_TAGS_REMOVER):
         tag.decompose()
