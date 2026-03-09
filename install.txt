@@ -47,13 +47,40 @@ sudo systemctl start ucreports-ce
 
 6. cloudflared — adicionar hostname ce.uc-reports.com
 
+NOTA: O cloudflared NÃO corre como serviço systemd nesta VM — é gerido pelo
+arrancar.sh do UCReports (ou como processo em background). Não usar
+"sudo systemctl restart cloudflared" (dá erro: Unit not found).
+
 Editar ~/.cloudflared/config.yml e adicionar antes de "- service: http_status:404":
 
   - hostname: ce.uc-reports.com
     service: http://127.0.0.1:5001
 
-Reiniciar o tunnel:
-sudo systemctl restart cloudflared
+Registar o novo hostname no DNS do Cloudflare (obrigatório — só editar config.yml não chega).
+
+OPÇÃO A (mais simples) — criar CNAME manualmente no painel Cloudflare:
+  Dash → uc-reports.com → DNS → Add record:
+    Type: CNAME
+    Name: ce
+    Target: e258d416-c8fe-4289-8b80-7a3163a531da.cfargotunnel.com
+    Proxy: Proxied (nuvem laranja)
+
+OPÇÃO B — via CLI (requer cert.pem; se falhar com "No file cert.pem", usar Opção A):
+  cloudflared tunnel login   # abre URL no browser para autenticar
+  cloudflared tunnel route dns auditoria-uc ce.uc-reports.com
+
+Reiniciar o cloudflared:
+
+pkill cloudflared
+sleep 2
+cloudflared tunnel --config /home/coursemonitoring/.cloudflared/config.yml run auditoria-uc >> ~/cloudflared.log 2>&1 &
+
+# Confirmar que arrancou:
+pgrep -a cloudflared
+tail -20 ~/cloudflared.log
+
+# NOTA: após reiniciar o cloudflared, aguardar 1-2 minutos para o URL
+# ficar acessível (propagação DNS/tunnel do Cloudflare).
 
 7. Auto-deploy (deployer)
 
