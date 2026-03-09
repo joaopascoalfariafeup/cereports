@@ -1347,8 +1347,10 @@ def ces():
             return True, ""  # diretor pode solicitar auto-avaliação
         if not _has_cargos:
             return True, ""  # sem cargos identificados: não restringir
-        if ce["tipo"] in _permit_tipos or ce["cur_id"] in _ca_ids:
+        if ce["tipo"] in _permit_tipos:
             return True, ""
+        if ce["cur_id"] in _ca_ids and ce["tipo"] == "D":
+            return True, ""  # CA só para doutoramentos
         return False, "Sem cargo que permita emitir parecer para este CE"
 
     nome_docente = cargos.get("nome", "") or eff_code
@@ -1359,12 +1361,16 @@ def ces():
         cargos_items.append("Conselho Pedagógico — pode emitir parecer CP de licenciaturas e mestrados")
     if cargos["is_cc"]:
         cargos_items.append("Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
+    _ces_tipo_map = {c["cur_id"]: c["tipo"] for c in ces_list}
     for c in cargos["cac_cursos"]:
         label_curso = _esc(c["sigla"] or c["nome"])
-        # artigo: Licenciatura → "da", Mestrado/Doutoramento → "do"
         s, n = (c["sigla"] or "").upper(), (c["nome"] or "").lower()
         artigo = "da" if s.startswith("L.") or n.startswith("licenciatura") else "do"
-        cargos_items.append(f'Comissão de Acompanhamento {artigo} {label_curso} — pode emitir parecer de CA')
+        tipo_ce = _ces_tipo_map.get(c["cur_id"], "")
+        if tipo_ce == "D":
+            cargos_items.append(f'Comissão de Acompanhamento {artigo} {label_curso} — pode emitir parecer de CA')
+        else:
+            cargos_items.append(f'Comissão de Acompanhamento {artigo} {label_curso} — CA não emite parecer (só em doutoramentos)')
     for d in cargos["director_cursos"]:
         s_dir = (d["sigla"] or "").upper()
         n_dir = (d["nome"] or "").lower()
@@ -1588,7 +1594,7 @@ def start_job():
             permitido = (
                 cur_id in director_ids  # diretor pode solicitar auto-avaliação
                 or ce_tipo in permit_tipos
-                or cur_id in ca_ids
+                or (cur_id in ca_ids and ce_tipo == "D")  # CA só para doutoramentos
             )
             if not permitido:
                 return _page("Sem permissão", f"""
