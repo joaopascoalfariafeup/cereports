@@ -49,6 +49,7 @@ def analisar_ce(
 
     # Chamar LLM
     logger.iniciar_fase("llm", f"A gerar parecer ({provider} / {modelo})...")
+    custo_pre = logger.total_custo_estimado() or 0.0
     try:
         parecer_html = analisar_relatorio_ce(
             relatorio_html=relatorio_html,
@@ -58,7 +59,9 @@ def analisar_ce(
             modelo=modelo,
             logger=logger,
         )
-        logger.concluir_fase("llm", "Parecer gerado")
+        custo_post = logger.total_custo_estimado() or 0.0
+        custo_str = f" [~${custo_post - custo_pre:.4f}]" if custo_post > custo_pre else ""
+        logger.concluir_fase("llm", f"Parecer gerado{custo_str}")
     except Exception as e:
         logger.concluir_fase("llm", f"Falha ao gerar parecer: {e}", ok=False)
         raise
