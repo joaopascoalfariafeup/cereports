@@ -20,7 +20,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 import urllib.request as _urllib_req
@@ -81,6 +81,136 @@ _SESSION_TIMEOUT_S = 8 * 3600
 _JOB_TIMEOUT_S = int(os.environ.get("WEB_JOB_TIMEOUT_S", "600"))  # 10 min
 
 _DRAINING_FILE = _SCRIPT_DIR / ".draining"
+
+# ---------------------------------------------------------------------------
+# Controlo de custos LLM por utilizador
+# ---------------------------------------------------------------------------
+WEB_COST_BYPASS_USERS: set[str] = {
+    u.strip().lower()
+    for u in os.environ.get("WEB_COST_BYPASS_USERS", "").split(",")
+    if u.strip()
+}
+WEB_FREE_LLM_PROVIDERS_LIST: list[str] = []
+for _p in os.environ.get("WEB_FREE_LLM_PROVIDERS", "iaedu").split(","):
+    _v = _p.strip().lower()
+    if _v and _v not in WEB_FREE_LLM_PROVIDERS_LIST:
+        WEB_FREE_LLM_PROVIDERS_LIST.append(_v)
+WEB_FREE_LLM_PROVIDERS_SET: set[str] = set(WEB_FREE_LLM_PROVIDERS_LIST)
+
+_COSTS_FILE = OUTPUT_DIR / "_web_costs_monthly.json"
+_USAGE_LOG_FILE = OUTPUT_DIR / "_web_usage_log.jsonl"
+_COSTS_LOCK = threading.Lock()
+
+
+def _month_key_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m")
+
+
+def _load_costs_store() -> dict:
+    if not _COSTS_FILE.exists():
+        return {"month": _month_key_utc(), "users": {}}
+    try:
+        data = json.loads(_COSTS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError
+        month = str(data.get("month", "")).strip() or _month_key_utc()
+        users = data.get("users", {})
+        if not isinstance(users, dict):
+            users = {}
+        return {"month": month, "users": users}
+    except Exception:
+        return {"month": _month_key_utc(), "users": {}}
+
+
+def _save_costs_store(data: dict) -> None:
+    _COSTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _COSTS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(_COSTS_FILE)
+
+
+def _user_cost_month(user_code: str) -> float:
+    if not user_code:
+        return 0.0
+    month = _month_key_utc()
+    with _COSTS_LOCK:
+        data = _load_costs_store()
+        if data.get("month") != month:
+            data = {"month": month, "users": {}}
+            _save_costs_store(data)
+        try:
+            return float(data.get("users", {}).get(user_code, 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def _add_user_cost_month(user_code: str, usd: float) -> None:
+    if not user_code or usd <= 0:
+        return
+    month = _month_key_utc()
+    with _COSTS_LOCK:
+        data = _load_costs_store()
+        if data.get("month") != month:
+            data = {"month": month, "users": {}}
+        users = data.setdefault("users", {})
+        try:
+            atual = float(users.get(user_code, 0.0))
+        except (TypeError, ValueError):
+            atual = 0.0
+        users[user_code] = round(atual + usd, 6)
+        _save_costs_store(data)
+
+
+def _append_usage_event(
+    user_code: str, ce_nome: str, custo_usd: float,
+    job_id: str, duracao_total_s: float,
+    llm_provider: str = "", llm_modelo: str = "",
+) -> None:
+    evento = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds") + "Z",
+        "user_code": user_code,
+        "ce_nome": ce_nome,
+        "job_id": job_id,
+        "custo_usd": round(float(custo_usd), 6),
+        "duracao_total_s": round(float(duracao_total_s), 3),
+        "llm_provider": (llm_provider or "").strip().lower(),
+        "llm_modelo": (llm_modelo or "").strip(),
+    }
+    with _COSTS_LOCK:
+        _USAGE_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with _USAGE_LOG_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(evento, ensure_ascii=False) + "\n")
+
+
+def _user_has_cost_bypass(user_code: str) -> bool:
+    candidatos: set[str] = set()
+    code = str(user_code or "").strip().lower()
+    if code:
+        candidatos.add(code)
+        candidatos.add(f"up{code}")
+    return bool(candidatos & WEB_COST_BYPASS_USERS)
+
+
+def _max_usd_per_user_per_month() -> float:
+    try:
+        return float(os.environ.get("WEB_MAX_USD_PER_USER_PER_MONTH", "0") or "0")
+    except ValueError:
+        return 0.0
+
+
+def _extrair_custo_estimado_valor(log_path: Path) -> float:
+    try:
+        txt = log_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return 0.0
+    matches = re.findall(r"Custo estimado:\s*\$([0-9]+(?:\.[0-9]+)?)", txt)
+    total = 0.0
+    for m in matches:
+        try:
+            total += float(m)
+        except ValueError:
+            continue
+    return total
 
 
 @dataclass
@@ -1557,6 +1687,15 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
         except Exception:
             pass
     finally:
+        if job.log_path.exists() and job.user_code:
+            custo_job = _extrair_custo_estimado_valor(job.log_path)
+            duracao_total_s = max(0.0, time.time() - float(job.started_at or 0.0))
+            _add_user_cost_month(job.user_code, custo_job)
+            _append_usage_event(
+                job.user_code, job.ce_nome, custo_job,
+                job.job_id, duracao_total_s,
+                job.llm_provider, job.llm_modelo,
+            )
         job.done = True
 
 
@@ -1633,6 +1772,21 @@ def start_job():
     flask_session["last_llm_choice"] = llm_choice or f"{llm_provider}::{llm_modelo}"
     flask_session["last_ce_nome"] = ce_nome
 
+    # Verificar limite de custo mensal por utilizador
+    user_code = (sess.codigo_pessoal or "").strip()
+    max_usd_mes = _max_usd_per_user_per_month()
+    if max_usd_mes > 0 and user_code and not _user_has_cost_bypass(user_code):
+        usado = _user_cost_month(user_code)
+        if usado >= max_usd_mes:
+            if llm_provider not in WEB_FREE_LLM_PROVIDERS_SET:
+                free_list = ", ".join(WEB_FREE_LLM_PROVIDERS_LIST) or "(nenhum)"
+                return _page("Limite mensal atingido", f"""
+                <div class="card">
+                  <p class="status-err"><b>Limite mensal atingido:</b> ${usado:.2f} / ${max_usd_mes:.2f}</p>
+                  <p class="muted">Com limite atingido, apenas são permitidos providers gratuitos: <code>{_esc(free_list)}</code>.</p>
+                  <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar</a></p>
+                </div>"""), 429
+
     with _JOBS_LOCK:
         em_execucao = sum(1 for j in _JOBS.values() if not j.done)
         if em_execucao >= MAX_RUNNING_JOBS:
@@ -1657,7 +1811,7 @@ def start_job():
         ce_nome=ce_nome,
         ano_letivo=_format_ano_letivo_display(ano_letivo),
         pv_id=pv_id,
-        user_code=(sess.codigo_pessoal or "").strip(),
+        user_code=user_code,
         llm_provider=llm_provider,
         llm_modelo=llm_modelo,
         run_dir=run_dir,
