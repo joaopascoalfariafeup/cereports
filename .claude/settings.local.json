@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add app_web.py llm_ce.py)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
