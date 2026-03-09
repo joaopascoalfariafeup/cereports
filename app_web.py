@@ -919,13 +919,84 @@ def privacidade():
         Os pareceres gerados com apoio de modelos de inteligência artificial podem conter
         imprecisões e devem ser sempre revistos antes da sua utilização.
       </p>
+
+      <h4>Credenciais e comunicação segura</h4>
+      <p>
+        A aplicação disponibiliza dois mecanismos de autenticação:
+      </p>
+      <ul>
+        <li>
+          <b>Autenticação direta (SIGARRA):</b> as credenciais introduzidas são usadas apenas para estabelecer
+          uma sessão segura no SIGARRA.
+          As credenciais não são guardadas em disco nem registadas em logs.
+        </li>
+        <li>
+          <b>Autenticação federada (Shibboleth/SAML2):</b> o fluxo de autenticação é iniciado via
+          Shibboleth/SAML2 com o Fornecedor de Identidade da Universidade do Porto (wayf.up.pt).
+          Por razões técnicas (necessidade de sessão HTTP do lado do servidor para acesso à API SIGARRA),
+          as credenciais introduzidas no formulário do IdP transitam pelo servidor desta aplicação antes
+          de serem reencaminhadas para o IdP — tal como num proxy HTTPS. As credenciais são transmitidas
+          exclusivamente sobre HTTPS, não são guardadas em disco e não são registadas em logs.
+          Apenas a asserção SAML resultante é utilizada para estabelecer a sessão.
+        </li>
+      </ul>
+      <p>
+        Toda a comunicação entre o utilizador e a aplicação é protegida através de ligações cifradas (HTTPS/TLS),
+        assegurando a confidencialidade e integridade dos dados em trânsito.
+      </p>
+
       <h4>Dados acedidos pela aplicação</h4>
       <p>
-        A aplicação recebe o PDF do relatório pedagógico do ciclo de estudos, fornecido pelo
-        utilizador autenticado, e envia-o ao LLM para geração do parecer.
+        A sessão autenticada é usada para aceder ao relatório do ciclo de estudo (CE) selecionado (versão para impressão), 
+        o qual é enviado ao LLM para análise e geração de proposta de parecer. 
         Os dados estatísticos e textuais do relatório são os únicos dados enviados ao LLM.
         Não são processados dados pessoais individuais de estudantes.
       </p>
+
+            <h4>Utilização de modelos de linguagem (LLM)</h4>
+      <p>
+        A aplicação utiliza modelos de linguagem de grande escala (LLM) para analisar o relatório do CE e elaborar proposta de parecer.
+        As garantias de privacidade e proteção de dados aplicáveis dependem do fornecedor selecionado:
+      </p>
+      <ul>
+        <li>
+        <b>Via IAedu:</b> o processamento é efetuado através da infraestrutura Microsoft Azure AI Foundry disponibilizada
+        pelo serviço IAedu da FCT/FCCN (sem custos diretos para a unidade orgânica utilizadora), limitado aos modelos aí
+        disponibilizados. De acordo com a respetiva <a href="https://iaedu.pt/pt/politica-de-privacidade-e-protecao-de-dados" target="_blank" rel="noopener noreferrer">política de privacidade</a>, 
+        os dados não são armazenados, registados, transmitidos a terceiros, utilizados para treino de modelos ou conservados sob qualquer forma.
+        </li>
+<li>
+  <b>Via Anthropic API:</b> o processamento é efetuado através da API comercial da Anthropic.
+  De acordo com a <a href="https://privacy.claude.com/en/collections/10672411-data-handling-retention">informação pública atualmente disponibilizada</a>, os dados enviados não são utilizados para treino de modelos,  podendo ser objeto de retenção temporária 
+  (limitada por defeito a 30 dias) para fins de monitorização de segurança e prevenção de abuso.
+          Quando aplicável, os custos de utilização são suportados institucionalmente pela FEUP,
+        podendo ser definidos limites de utilização por utilizador no âmbito de políticas de utilização responsável.
+
+</li>
+      </ul>
+
+      <h4>Registos técnicos e auditoria</h4>
+      <p>
+        Para fins de auditoria técnica, monitorização operacional e controlo de custos de utilização dos serviços LLM,
+        são mantidos registos técnicos persistentes contendo apenas metadados de execução, incluindo o código do
+        utilizador, o código do ciclo de estudos, data e hora da execução, identificador técnico da
+        operação, modelo utilizado e custo estimado. Não são armazenados conteúdos processados nem credenciais de autenticação.
+        Estes registos são utilizados exclusivamente para fins operacionais, de auditoria e gestão de custos.
+      </p>
+
+      <h4>Retenção e exportação de dados</h4>
+      <p>
+        Os dados gerados durante a execução podem ser exportados pelo utilizador em formato <code>.zip</code>.
+        Estes dados são removidos automaticamente do disco após um período máximo de
+        {WEB_OUTPUT_RETENTION_HOURS:.3g} hora(s) de retenção configurado no servidor.
+      </p>
+
+      <p class="muted">
+        O código-fonte desta ferramenta é público e auditável em
+        <a href="https://github.com/joaopascoalfariafeup/ucreports" target="_blank" rel="noopener">github.com/joaopascoalfariafeup/ucreports</a>.
+      </p>
+
+      
       <h4>Utilização de modelos de linguagem (LLM)</h4>
       <p>
         O parecer é gerado por um LLM (Anthropic Claude ou IAedu/GPT-4o). As garantias
