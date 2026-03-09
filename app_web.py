@@ -1469,11 +1469,12 @@ def ces():
                  value="{_esc(last_ce_nome)}" style="max-width:500px;" required>
         </div>"""
 
-    body = f"""
-    <div class="card">
-      {impersonate_html}
-      {cargos_html}
-      <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data"
+    # Se o utilizador tem cargos identificados mas nenhum CE é permitido, esconder formulário
+    ces_permitidos_existem = not _has_cargos or bool(ces_permitidos if ces_list else True)
+    if not ces_permitidos_existem:
+        form_html = '<p class="muted" style="margin-top:8px;">Não tem cargos que permitam emitir parecer para nenhum dos ciclos de estudos disponíveis.</p>'
+    else:
+        form_html = f"""<form method="post" action="{url_for('start_job')}" enctype="multipart/form-data"
             style="margin-top:4px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <input type="hidden" name="cur_id" id="cur_id_hidden">
@@ -1501,7 +1502,13 @@ def ces():
         <div class="row" style="justify-content:flex-start; margin-top:14px;">
           <button class="btn" type="submit">Gerar parecer</button>
         </div>
-      </form>
+      </form>"""
+
+    body = f"""
+    <div class="card">
+      {impersonate_html}
+      {cargos_html}
+      {form_html}
     </div>
     """
     return _page("Seleção do Ciclo de Estudos", body, step=1)
