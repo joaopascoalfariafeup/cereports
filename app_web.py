@@ -1310,13 +1310,13 @@ def ces():
 
     cargos_items = []
     if cargos["is_cp"]:
-        cargos_items.append("Membro do Conselho Pedagógico — pode emitir parecer CP de licenciaturas e mestrados")
+        cargos_items.append("Conselho Pedagógico — pode emitir parecer CP de licenciaturas e mestrados")
     if cargos["is_cc"]:
-        cargos_items.append("Membro do Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
+        cargos_items.append("Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
     for c in cargos["cac_cursos"]:
         cargos_items.append(
             f'{c["papel"]} da Comissão de Acompanhamento — {_esc(c["nome"])}'
-            f' — pode emitir parecer de acompanhamento'
+            f' — pode emitir parecer de CA'
         )
     for cur_id in cargos["director_cur_ids"]:
         nome_dir = _ces_by_id.get(cur_id, cur_id)
