@@ -1340,7 +1340,7 @@ def ces():
         _permit_tipos.update({"L", "M", "D"})
     _ca_ids = {c["cur_id"] for c in cargos["cac_cursos"]}
     _director_ids = {d["cur_id"] for d in cargos["director_cursos"]}
-    _has_cargos = bool(_permit_tipos or _ca_ids)
+    _has_cargos = bool(_permit_tipos or _ca_ids or _director_ids)
 
     def _ce_permitido(ce: dict) -> tuple[bool, str]:
         if ce["cur_id"] in _director_ids:
@@ -1594,7 +1594,7 @@ def start_job():
             permit_tipos.update({"L", "M", "D"})
         ca_ids = {c["cur_id"] for c in cargos["cac_cursos"]}
         director_ids = {d["cur_id"] for d in cargos["director_cursos"]}
-        has_cargos = bool(permit_tipos or ca_ids)
+        has_cargos = bool(permit_tipos or ca_ids or director_ids)
         if has_cargos:
             ces_pub = listar_ces_publicos()
             ce_tipo = next((c["tipo"] for c in ces_pub if c["cur_id"] == cur_id), None)
