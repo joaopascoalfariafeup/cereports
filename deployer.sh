@@ -52,13 +52,16 @@ while true; do
     fi
 
     # 3. Pull, atualização de dependências e reinício
-    git -C "$ROOT" pull --quiet
-    VENV_PIP="$(find /home /root -maxdepth 4 -name pip -path "*/cereports-venv/*" 2>/dev/null | head -1)"
-    if [ -n "$VENV_PIP" ]; then
-        log "A atualizar dependências Python..."
-        "$VENV_PIP" install -q -r "$ROOT/requirements.txt" && log "Dependências OK." || log "AVISO: pip falhou."
-    fi
-    sudo systemctl restart ucreports-ce
+    # Garantir que .draining é sempre removido, mesmo em caso de erro
+    {
+        git -C "$ROOT" pull --quiet
+        VENV_PIP="$(find /home /root -maxdepth 4 -name pip -path "*/cereports-venv/*" 2>/dev/null | head -1)"
+        if [ -n "$VENV_PIP" ]; then
+            log "A atualizar dependências Python..."
+            "$VENV_PIP" install -q -r "$ROOT/requirements.txt" && log "Dependências OK." || log "AVISO: pip falhou."
+        fi
+        sudo systemctl restart ucreports-ce
+    } || log "AVISO: erro durante deploy (ver systemctl status ucreports-ce)."
     rm -f "$ROOT/.draining"
     log "Deploy concluído: ${REMOTE:0:8}"
 done
