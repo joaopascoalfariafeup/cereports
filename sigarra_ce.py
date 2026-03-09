@@ -81,33 +81,33 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
 
     # Nome do docente — várias estratégias por ordem de fiabilidade
     nome = ""
-    # 1. Elemento com "nome" na classe (padrão SIGARRA para páginas pessoais)
-    for el in soup.find_all(class_=re.compile(r"nome", re.I)):
-        t = el.get_text(strip=True)
-        if " " in t and 6 < len(t) < 100:
-            nome = t
-            break
+    # 1. Título da página (ex: "João Carlos Pascoal Faria - SIGARRA")
+    #    É a estratégia mais fiável porque reflete a página vista, não o utilizador logado.
+    title_tag = soup.find("title")
+    if title_tag:
+        raw = title_tag.get_text(strip=True)
+        for part in re.split(r"\s*[-|]\s*", raw):
+            part = part.strip()
+            if " " in part and 6 < len(part) < 100 and not re.search(r"(sigarra|porto|feup)", part, re.I):
+                nome = part
+                break
     # 2. h2 / h3 com aspecto de nome próprio (exclui "FEUP" e similares)
     if not nome:
         for tag in ("h2", "h3"):
             for el in soup.find_all(tag):
                 t = el.get_text(strip=True)
-                if " " in t and 6 < len(t) < 100:
+                if " " in t and 6 < len(t) < 100 and not re.search(r"(sigarra|porto|feup)", t, re.I):
                     nome = t
                     break
             if nome:
                 break
-    # 3. Título da página (ex: "João Carlos Pascoal Faria - SIGARRA")
+    # 3. Elemento com "nome" na classe (pode incluir o nav com o utilizador logado — último recurso)
     if not nome:
-        title_tag = soup.find("title")
-        if title_tag:
-            # Tentar obter a parte que parece um nome (antes de " - " ou "| SIGARRA")
-            raw = title_tag.get_text(strip=True)
-            for part in re.split(r"\s*[-|]\s*", raw):
-                part = part.strip()
-                if " " in part and 6 < len(part) < 100 and not re.search(r"(sigarra|porto|feup)", part, re.I):
-                    nome = part
-                    break
+        for el in soup.find_all(class_=re.compile(r"nome", re.I)):
+            t = el.get_text(strip=True)
+            if " " in t and 6 < len(t) < 100:
+                nome = t
+                break
 
     # Localizar a secção "Cargos"
     cargos_h3 = soup.find("h3", string=re.compile(r"Cargos", re.I))
