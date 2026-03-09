@@ -1430,15 +1430,26 @@ def ces():
                     f'{_esc(ce["nome"])}</option>'
                 )
             optgroups += "</optgroup>"
-        # Se o último CE selecionado agora está desativado, limpar pré-seleção
-        last_valid = last_ce_nome if any(
-            ce["nome"] == last_ce_nome and _ce_permitido(ce)[0] for ce in ces_list
-        ) else ""
+        # Determinar pré-seleção: último válido ou, se não existir, primeiro permitido
+        ces_permitidos = [c for c in ces_list if _ce_permitido(c)[0]]
+        if last_ce_nome and any(c["nome"] == last_ce_nome for c in ces_permitidos):
+            default_ce = last_ce_nome
+        elif ces_permitidos:
+            default_ce = ces_permitidos[0]["nome"]
+        else:
+            default_ce = ""
+        # Re-aplicar selected ao CE padrão (pode ter mudado para o 1º permitido)
+        if default_ce and default_ce != last_ce_nome:
+            optgroups = optgroups.replace(
+                f'value="{_esc(default_ce)}"',
+                f'value="{_esc(default_ce)}" selected',
+                1,
+            )
         ce_field_html = f"""
         <div class="form-row-inline">
           <label for="ce_nome">Ciclo de estudos:</label>
           <select name="ce_nome" id="ce_nome" required style="max-width:560px;">
-            <option value="" disabled{'' if last_valid else ' selected'}>Selecione um ciclo de estudos...</option>
+            <option value="" disabled{'' if default_ce else ' selected'}>Selecione um ciclo de estudos...</option>
             {optgroups}
           </select>
         </div>"""
