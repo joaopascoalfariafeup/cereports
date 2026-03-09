@@ -438,4 +438,8 @@ def analisar_relatorio_ce(
             custo=custo,
         )
 
-    return resp["text"] if resp else ""
+    texto = resp["text"] if resp else ""
+    # Remover marcadores de bloco de código Markdown que o LLM por vezes inclui
+    texto = re.sub(r"^```(?:html)?\s*\n?", "", texto.strip(), flags=re.IGNORECASE)
+    texto = re.sub(r"\n?```\s*$", "", texto.strip())
+    return texto.strip()

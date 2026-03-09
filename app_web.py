@@ -772,8 +772,8 @@ function setupEditableBlocks() {
         block.focus();
         btnEdit.textContent = 'Guardar';
         btnEdit.classList.add('editing');
-        if (btnCancel) { btnCancel.style.display = ''; }
-        if (counter) { counter.style.display = ''; updateCounter(); }
+        if (btnCancel) { btnCancel.style.display = 'inline-flex'; }
+        if (counter) { counter.style.display = 'inline'; updateCounter(); }
       }
     });
 
