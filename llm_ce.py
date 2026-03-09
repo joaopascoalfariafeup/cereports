@@ -142,27 +142,20 @@ def _estimar_custo(modelo: str, input_tokens: int, output_tokens: int) -> float 
     return (input_tokens * precos[0] + output_tokens * precos[1]) / 1_000_000
 
 
-def _chamar_llm_anthropic_pdf(
-    pdf_bytes: bytes, user_text: str, system: str, modelo: str, max_tokens: int
+def _chamar_llm_anthropic_html(
+    relatorio_html: str, user_text: str, system: str, modelo: str, max_tokens: int
 ) -> dict:
-    """Chamada Anthropic com PDF nativo (base64 document)."""
+    """Chamada Anthropic com conteúdo HTML do relatório."""
     client = anthropic.Anthropic()
-    content = [
-        {
-            "type": "document",
-            "source": {
-                "type": "base64",
-                "media_type": "application/pdf",
-                "data": base64.b64encode(pdf_bytes).decode(),
-            },
-        },
-        {"type": "text", "text": user_text},
-    ]
+    mensagem_user = (
+        f"{user_text}\n\n"
+        f"## Conteúdo do relatório (HTML)\n\n{relatorio_html}"
+    )
     message = client.messages.create(
         model=modelo,
         max_tokens=max_tokens,
         system=system,
-        messages=[{"role": "user", "content": content}],
+        messages=[{"role": "user", "content": mensagem_user}],
     )
     return {
         "text": message.content[0].text.strip(),
@@ -172,15 +165,18 @@ def _chamar_llm_anthropic_pdf(
     }
 
 
-def _chamar_llm_openai_texto(
-    texto_pdf: str, user_text: str, system: str, modelo: str, max_tokens: int,
+def _chamar_llm_openai_html(
+    relatorio_html: str, user_text: str, system: str, modelo: str, max_tokens: int,
     base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY",
 ) -> dict:
-    """Chamada OpenAI-compatible com texto extraído do PDF."""
+    """Chamada OpenAI-compatible com conteúdo HTML do relatório."""
     load_env()
     api_key = os.environ.get(api_key_env, "").strip() or None
     client = OpenAI(api_key=api_key, base_url=base_url or None)
-    mensagem_user = f"{user_text}\n\n## Conteúdo do relatório (texto extraído do PDF)\n\n{texto_pdf}"
+    mensagem_user = (
+        f"{user_text}\n\n"
+        f"## Conteúdo do relatório (HTML)\n\n{relatorio_html}"
+    )
     resp = client.chat.completions.create(
         model=modelo,
         messages=[
@@ -199,22 +195,22 @@ def _chamar_llm_openai_texto(
 
 
 def analisar_relatorio_ce(
-    pdf_bytes: bytes,
+    relatorio_html: str,
     ce_nome: str,
     ano_letivo: str,
     provider: str,
     modelo: str,
     logger: AuditoriaLogger | None = None,
 ) -> str:
-    """Envia o PDF do relatório de CE ao LLM e devolve o parecer em HTML.
+    """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
     Args:
-        pdf_bytes:  Bytes do PDF do relatório pedagógico.
-        ce_nome:    Nome do ciclo de estudos (para o prompt).
-        ano_letivo: Ano letivo (ex: "2024/25").
-        provider:   Provider LLM: "anthropic", "openai" ou "iaedu".
-        modelo:     ID do modelo a usar.
-        logger:     Logger para registar progresso e metadados.
+        relatorio_html: HTML limpo do relatório pedagógico (obtido via SIGARRA).
+        ce_nome:        Nome do ciclo de estudos (para o prompt).
+        ano_letivo:     Ano letivo (ex: "2024/25").
+        provider:       Provider LLM: "anthropic", "openai" ou "iaedu".
+        modelo:         ID do modelo a usar.
+        logger:         Logger para registar progresso e metadados.
 
     Returns:
         String HTML com o parecer gerado pelo LLM.
@@ -225,7 +221,7 @@ def analisar_relatorio_ce(
 
     user_text = (
         f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
-        f'"{ce_nome}", ano letivo {ano_letivo}, com base no PDF fornecido.'
+        f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
 
     max_tokens = 4096
@@ -240,20 +236,19 @@ def analisar_relatorio_ce(
     while True:
         try:
             if provider == "anthropic":
-                resp = _chamar_llm_anthropic_pdf(pdf_bytes, user_text, system, modelo, max_tokens)
+                resp = _chamar_llm_anthropic_html(
+                    relatorio_html, user_text, system, modelo, max_tokens
+                )
             elif provider == "iaedu":
                 base_url = os.environ.get("IAEDU_ENDPOINT", "").strip() or None
-                api_key_env = "IAEDU_API_KEY"
-                texto_pdf = _pdf_to_text(pdf_bytes)
-                resp = _chamar_llm_openai_texto(
-                    texto_pdf, user_text, system, modelo, max_tokens,
-                    base_url=base_url, api_key_env=api_key_env,
+                resp = _chamar_llm_openai_html(
+                    relatorio_html, user_text, system, modelo, max_tokens,
+                    base_url=base_url, api_key_env="IAEDU_API_KEY",
                 )
             else:  # openai
                 base_url = os.environ.get("OPENAI_BASE_URL", "").strip() or None
-                texto_pdf = _pdf_to_text(pdf_bytes)
-                resp = _chamar_llm_openai_texto(
-                    texto_pdf, user_text, system, modelo, max_tokens,
+                resp = _chamar_llm_openai_html(
+                    relatorio_html, user_text, system, modelo, max_tokens,
                     base_url=base_url, api_key_env="OPENAI_API_KEY",
                 )
             break

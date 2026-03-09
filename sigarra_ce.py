@@ -171,6 +171,78 @@ def listar_relatorios_ce(
 
 
 # ---------------------------------------------------------------------------
+# HTML do relatório de um CE (versão impressão, autenticação obrigatória)
+# ---------------------------------------------------------------------------
+
+SIGARRA_RELCUR_PRINT_URL = (
+    "https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id={}&pv_print_ver=S"
+)
+
+# Tags HTML a conservar na limpeza (estrutura semântica para o LLM)
+_HTML_TAGS_MANTER_ATTRS = {"td": {"colspan", "rowspan"}, "th": {"colspan", "rowspan"}}
+# Tags cujo conteúdo deve ser removido por completo
+_HTML_TAGS_REMOVER = {
+    "script", "style", "link", "meta", "noscript",
+    "iframe", "object", "embed", "form", "input", "button",
+}
+
+
+def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
+    """Obtém e limpa o HTML do relatório de CE a partir do SIGARRA.
+
+    Faz fetch autenticado de
+    https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id=NNN&pv_print_ver=S
+    e devolve o HTML limpo de JS, CSS e atributos desnecessários,
+    mantendo apenas a estrutura semântica (títulos, parágrafos, tabelas, listas).
+
+    Args:
+        pv_id:  Identificador do relatório (pv_id).
+        sessao: Sessão autenticada no SIGARRA.
+
+    Returns:
+        String com o HTML limpo do relatório (conteúdo do <body>).
+
+    Raises:
+        ValueError: Se não for possível obter o relatório.
+    """
+    from bs4 import Comment
+
+    url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
+    try:
+        html_str = sessao.fetch_html(url, timeout=30)
+    except Exception as e:
+        raise ValueError(f"Não foi possível obter o relatório pv_id={pv_id}: {e}") from e
+
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    # 1. Remover tags indesejadas (e o seu conteúdo)
+    for tag in soup.find_all(_HTML_TAGS_REMOVER):
+        tag.decompose()
+
+    # 2. Remover comentários HTML
+    for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
+        comment.extract()
+
+    # 3. Limpar atributos: manter apenas colspan/rowspan em células de tabela
+    for tag in soup.find_all(True):
+        permitidos = _HTML_TAGS_MANTER_ATTRS.get(tag.name, set())
+        attrs_apagar = [a for a in list(tag.attrs) if a not in permitidos]
+        for a in attrs_apagar:
+            del tag[a]
+
+    # 4. Extrair o <body> (ou fallback para tudo)
+    body = soup.find("body") or soup
+
+    html_limpo = str(body)
+
+    # 5. Comprimir espaços excessivos
+    html_limpo = re.sub(r"[ \t]{2,}", " ", html_limpo)
+    html_limpo = re.sub(r"\n{3,}", "\n\n", html_limpo)
+
+    return html_limpo.strip()
+
+
+# ---------------------------------------------------------------------------
 # URLs dos CEs no SIGARRA
 # ---------------------------------------------------------------------------
 

@@ -32,7 +32,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -776,6 +776,13 @@ function setupCeYearLoader() {
     } catch(e) { return []; }
   }
 
+  function syncPvId() {
+    const pvIdInput = _byId('pv_id');
+    if (!pvIdInput) return;
+    const opt = anoSelect.options[anoSelect.selectedIndex];
+    pvIdInput.value = (opt && opt.dataset.pvId) ? opt.dataset.pvId : '';
+  }
+
   function populateAnos(anos) {
     const currentVal = anoSelect.value;
     anoSelect.innerHTML = '';
@@ -783,6 +790,8 @@ function setupCeYearLoader() {
       const opt = document.createElement('option');
       opt.value = a.value;
       opt.textContent = a.label;
+      if (a.pvId) opt.dataset.pvId = a.pvId;
+      if (a.pv_id) opt.dataset.pvId = a.pv_id;
       if (a.value === currentVal) opt.selected = true;
       anoSelect.appendChild(opt);
     });
@@ -790,6 +799,7 @@ function setupCeYearLoader() {
     if (!anoSelect.value && anos.length > 0) {
       anoSelect.value = anos[0].value;
     }
+    syncPvId();
   }
 
   function loadYears(curId) {
@@ -811,6 +821,8 @@ function setupCeYearLoader() {
     const curId = opt ? (opt.dataset.curId || '') : '';
     loadYears(curId);
   });
+
+  anoSelect.addEventListener('change', syncPvId);
 
   // Carregar imediatamente ao entrar na página
   const selOpt = ceSelect.options[ceSelect.selectedIndex];
@@ -1128,7 +1140,7 @@ def api_relatorios_ce(cur_id: str):
         ano = r["ano"]
         y = int(ano)
         label = f"{y}/{(y + 1) % 100:02d}"
-        anos.append({"value": ano, "label": label})
+        anos.append({"value": ano, "label": label, "pv_id": r["pv_id"]})
 
     return Response(json.dumps({"anos": anos}), mimetype="application/json")
 
@@ -1217,7 +1229,6 @@ def ces():
 
     body = f"""
     <div class="card">
-      <h3>Gerar parecer sobre relatório pedagógico de CE</h3>
       <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data" style="margin-top:4px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
 
@@ -1231,10 +1242,7 @@ def ces():
           </select>
         </div>
 
-        <div class="form-row-inline">
-          <label for="pdf_upload">Relatório (PDF):</label>
-          <input type="file" name="pdf_upload" id="pdf_upload" accept=".pdf" required style="max-width:400px;">
-        </div>
+        <input type="hidden" name="pv_id" id="pv_id" value="">
 
         <div class="form-row-inline">
           <label for="llm_choice_select">Modelo:</label>
@@ -1257,13 +1265,13 @@ def ces():
 # Iniciar job
 # ---------------------------------------------------------------------------
 
-def _run_job(job: Tarefa, pdf_bytes: bytes, verbosidade: int) -> None:
+def _run_job(job: Tarefa, relatorio_html: str, verbosidade: int) -> None:
     """Executa a análise e marca o job como concluído."""
     try:
         with AuditoriaLogger(job.log_path, verbosidade=verbosidade) as log:
             log.cabecalho(job.job_id, usuario=job.user_code)
             analisar_ce(
-                pdf_bytes=pdf_bytes,
+                relatorio_html=relatorio_html,
                 ce_nome=job.ce_nome,
                 ano_letivo=job.ano_letivo,
                 provider=job.llm_provider,
@@ -1301,24 +1309,33 @@ def start_job():
 
     ce_nome = request.form.get("ce_nome", "").strip()
     ano_letivo = request.form.get("ano_letivo", "").strip()
+    pv_id = request.form.get("pv_id", "").strip()
     llm_choice = request.form.get("llm_choice", "").strip()
 
     if not ce_nome:
         return redirect(url_for("ces"))
 
-    # PDF upload
-    pdf_file = request.files.get("pdf_upload")
-    if not pdf_file or not pdf_file.filename:
+    if not pv_id or not re.match(r'^\d+$', pv_id):
         return _page("Erro", f"""
         <div class="card">
-          <p class="status-err">Nenhum ficheiro PDF fornecido.</p>
+          <p class="status-err">Relatório não identificado. Selecione um ciclo de estudos e um ano letivo.</p>
           <p><a href="{url_for('ces')}">Voltar</a></p>
         </div>""")
-    pdf_bytes = pdf_file.read()
-    if len(pdf_bytes) < 100:
+
+    # Obter HTML do relatório a partir do SIGARRA (autenticado)
+    try:
+        relatorio_html = obter_relatorio_ce_html(pv_id, sess)
+    except Exception as e:
         return _page("Erro", f"""
         <div class="card">
-          <p class="status-err">O ficheiro PDF parece estar vazio ou inválido.</p>
+          <p class="status-err">Não foi possível obter o relatório do SIGARRA: {_esc(e)}</p>
+          <p><a href="{url_for('ces')}">Voltar</a></p>
+        </div>""")
+
+    if len(relatorio_html) < 200:
+        return _page("Erro", f"""
+        <div class="card">
+          <p class="status-err">O relatório obtido parece estar vazio ou inválido.</p>
           <p><a href="{url_for('ces')}">Voltar</a></p>
         </div>""")
 
@@ -1372,7 +1389,7 @@ def start_job():
 
     t = threading.Thread(
         target=_run_job,
-        args=(job, pdf_bytes, WEB_VERBOSIDADE),
+        args=(job, relatorio_html, WEB_VERBOSIDADE),
         daemon=True,
     )
     t.start()
