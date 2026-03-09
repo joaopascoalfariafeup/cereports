@@ -770,40 +770,52 @@ function setupCeYearLoader() {
   const anoSelect = _byId('ano_letivo');
   if (!ceSelect || !anoSelect) return;
 
+  function getFallbackAnos() {
+    try {
+      return JSON.parse(anoSelect.dataset.fallbackAnos || '[]');
+    } catch(e) { return []; }
+  }
+
+  function populateAnos(anos) {
+    const currentVal = anoSelect.value;
+    anoSelect.innerHTML = '';
+    anos.forEach(function(a) {
+      const opt = document.createElement('option');
+      opt.value = a.value;
+      opt.textContent = a.label;
+      if (a.value === currentVal) opt.selected = true;
+      anoSelect.appendChild(opt);
+    });
+    // Default: selecionar o mais recente (primeiro da lista)
+    if (!anoSelect.value && anos.length > 0) {
+      anoSelect.value = anos[0].value;
+    }
+  }
+
   function loadYears(curId) {
-    if (!curId) return;
+    if (!curId) {
+      populateAnos(getFallbackAnos());
+      return;
+    }
     fetch('/api/relatorios_ce/' + encodeURIComponent(curId))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.anos || data.anos.length === 0) return;
-        const currentVal = anoSelect.value;
-        anoSelect.innerHTML = '';
-        data.anos.forEach(function(a) {
-          const opt = document.createElement('option');
-          opt.value = a.value;
-          opt.textContent = a.label;
-          if (a.value === currentVal) opt.selected = true;
-          anoSelect.appendChild(opt);
-        });
-        // Default: selecionar o mais recente (primeiro da lista)
-        if (!anoSelect.value && data.anos.length > 0) {
-          anoSelect.value = data.anos[0].value;
-        }
+        var anos = (data.anos && data.anos.length > 0) ? data.anos : getFallbackAnos();
+        populateAnos(anos);
       })
-      .catch(function() { /* sem relatórios ou erro de rede: manter opções padrão */ });
+      .catch(function() { populateAnos(getFallbackAnos()); });
   }
 
   ceSelect.addEventListener('change', function() {
     const opt = ceSelect.options[ceSelect.selectedIndex];
-    const curId = opt ? opt.dataset.curId : '';
-    if (curId) loadYears(curId);
+    const curId = opt ? (opt.dataset.curId || '') : '';
+    loadYears(curId);
   });
 
-  // Carregar imediatamente se já existir um CE selecionado (ex: volta da sessão)
+  // Carregar imediatamente ao entrar na página
   const selOpt = ceSelect.options[ceSelect.selectedIndex];
-  if (selOpt && selOpt.value && selOpt.dataset.curId) {
-    loadYears(selOpt.dataset.curId);
-  }
+  const initCurId = (selOpt && selOpt.dataset.curId) ? selOpt.dataset.curId : '';
+  loadYears(initCurId);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1110,7 +1122,7 @@ def api_relatorios_ce(cur_id: str):
     if not re.match(r'^\d+$', cur_id):
         return Response('{"error":"invalid"}', status=400, mimetype="application/json")
 
-    relatorios = listar_relatorios_ce(cur_id)
+    relatorios = listar_relatorios_ce(cur_id, sessao=sess)
     anos = []
     for r in relatorios:
         ano = r["ano"]
@@ -1164,11 +1176,8 @@ def ces():
         for c in llm_choices
     )
 
-    anos = _gera_lista_anos_letivos()
-    ano_options = "\n".join(
-        f'<option value="{_esc(a["value"])}">{_esc(a["label"])}</option>'
-        for a in anos
-    )
+    anos_fallback = _gera_lista_anos_letivos()
+    anos_fallback_json = _esc(json.dumps(anos_fallback))
 
     # --- Dropdown de CEs a partir da página pública do SIGARRA ---
     ces_list = listar_ces_publicos()
@@ -1216,8 +1225,9 @@ def ces():
 
         <div class="form-row-inline">
           <label for="ano_letivo">Ano letivo:</label>
-          <select name="ano_letivo" id="ano_letivo" style="max-width:160px;">
-            {ano_options}
+          <select name="ano_letivo" id="ano_letivo" style="max-width:160px;"
+                  data-fallback-anos="{anos_fallback_json}">
+            <option value="" disabled selected>—</option>
           </select>
         </div>
 

@@ -102,11 +102,18 @@ _RELCURS_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _RELCURS_CACHE_TTL = 3600  # 1 hora
 
 
-def listar_relatorios_ce(cur_id: str) -> list[dict]:
+def listar_relatorios_ce(
+    cur_id: str,
+    sessao: "SigarraSession | None" = None,
+) -> list[dict]:
     """Obtém lista de relatórios pedagógicos disponíveis para um curso no SIGARRA.
 
-    Faz scraping de
+    Faz scraping (com sessão autenticada se fornecida) de
     https://sigarra.up.pt/feup/pt/relcur_geral.show_relcurs?pv_curso_id=NNN
+
+    Args:
+        cur_id:  Identificador do curso (pv_curso_id).
+        sessao:  Sessão autenticada no SIGARRA; se None faz pedido anónimo.
 
     Returns:
         Lista de dicts com campos: pv_id (str), ano (str, ex: ``"2024"``).
@@ -124,13 +131,16 @@ def listar_relatorios_ce(cur_id: str) -> list[dict]:
 
     url = SIGARRA_RELCURS_URL.format(cur_id)
     try:
-        req = _req.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; CEReports/1.0)"},
-        )
-        resp = _req.urlopen(req, timeout=15)
-        charset = resp.headers.get_content_charset() or "utf-8"
-        html_str = resp.read().decode(charset, errors="replace")
+        if sessao is not None:
+            html_str = sessao.fetch_html(url, timeout=15)
+        else:
+            req = _req.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; CEReports/1.0)"},
+            )
+            resp = _req.urlopen(req, timeout=15)
+            charset = resp.headers.get_content_charset() or "utf-8"
+            html_str = resp.read().decode(charset, errors="replace")
     except Exception:
         return []
 
