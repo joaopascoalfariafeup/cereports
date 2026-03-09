@@ -56,21 +56,99 @@ def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
     return ""
 
 
-def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
-    """Obtém cargos relevantes do docente da sua página pessoal SIGARRA.
+def _is_estudante(codigo: str) -> bool:
+    """Código de estudante: tipicamente 9+ dígitos a começar com ano (20XX...)."""
+    return bool(re.match(r"^20\d{7,}$", codigo))
 
-    Faz fetch de func_geral.formview?p_codigo=<codigo> e extrai da tabela
-    "Cargos" os papéis relevantes para emissão de pareceres de CEs.
+
+def _obter_cargos_estudante(sess: SigarraSession, num_unico: str) -> dict:
+    """Obtém cargos de CA de um estudante.
+
+    1. Vai a fest_geral.cursos_list?pv_num_unico=NNN para obter cursos "A Frequentar".
+    2. Para cada curso, verifica se o estudante está na CA via
+       CUR_GERAL.CUR_COMISSAO_acomp_LIST?pv_curso_id=NNN.
+    """
+    url = f"{SIGARRA_BASE}/fest_geral.cursos_list?pv_num_unico={num_unico}"
+    try:
+        html_str = sess.fetch_html(url, timeout=20)
+    except Exception:
+        return dict(_EMPTY_CARGOS)
+
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    # Nome — do título da página
+    nome = ""
+    title_tag = soup.find("title")
+    if title_tag:
+        raw = title_tag.get_text(strip=True)
+        for part in re.split(r"\s*[-|]\s*", raw):
+            part = part.strip()
+            if " " in part and 6 < len(part) < 100 and not re.search(r"(sigarra|porto|feup)", part, re.I):
+                nome = part
+                break
+
+    cac_cursos: list[dict] = []
+    for div in soup.find_all("div", class_="estudante-lista-curso-activo"):
+        # Verificar "A Frequentar"
+        estado = None
+        for row in div.find_all("tr"):
+            cells = row.find_all("td")
+            if len(cells) == 2 and "estado" in cells[0].get_text(strip=True).lower():
+                estado = cells[1].get_text(strip=True)
+        if estado != "A Frequentar":
+            continue
+
+        # Obter cur_id
+        a_curso = div.find("a", href=re.compile(r"cur_geral\.cur_view\?pv_curso_id=\d+", re.I))
+        if not a_curso:
+            continue
+        m = re.search(r"pv_curso_id=(\d+)", a_curso.get("href", ""))
+        if not m:
+            continue
+        cur_id = m.group(1)
+        cur_nome = a_curso.get_text(strip=True)
+
+        # Verificar membership na CA
+        ca_url = f"{SIGARRA_BASE}/CUR_GERAL.CUR_COMISSAO_acomp_LIST?pv_curso_id={cur_id}"
+        try:
+            ca_html = sess.fetch_html(ca_url, timeout=15)
+            ca_soup = BeautifulSoup(ca_html, "html.parser")
+            ca_link = ca_soup.find("a", href=re.compile(rf"pv_num_unico={re.escape(num_unico)}", re.I))
+            if not ca_link:
+                continue
+            papel = "Membro"
+            row_ca = ca_link.find_parent("tr")
+            if row_ca:
+                td_papel = row_ca.find("td", class_="k")
+                if td_papel:
+                    papel = td_papel.get_text(strip=True) or "Membro"
+                if not nome:
+                    nome = ca_link.get_text(strip=True)
+            sigla = _obter_sigla_curso(sess, cur_id)
+            cac_cursos.append({"cur_id": cur_id, "nome": cur_nome, "sigla": sigla, "papel": papel})
+        except Exception:
+            continue
+
+    return {**_EMPTY_CARGOS, "nome": nome, "cac_cursos": cac_cursos}
+
+
+def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
+    """Obtém cargos relevantes de um utilizador (docente ou estudante).
+
+    Para estudantes (código 20XXXXXXX): vai à página de estudante e verifica CA.
+    Para docentes: vai à página de cargos e extrai CP, CC, CA, diretor.
 
     Returns dict com:
-      nome            str   — nome completo do docente
-      is_cp           bool  — membro/presidente do Conselho Pedagógico da FEUP
-      is_cc           bool  — membro/presidente do Conselho Científico da FEUP
-      cac_cursos      list  — [{"cur_id", "nome", "sigla", "papel"}] comissão de acompanhamento
-      director_cur_ids list — [cur_id, ...] cursos em que é diretor (conflito)
+      nome            str  — nome completo
+      is_cp           bool — membro do Conselho Pedagógico da FEUP
+      is_cc           bool — membro do Conselho Científico da FEUP
+      cac_cursos      list — [{"cur_id", "nome", "sigla", "papel"}]
+      director_cursos list — [{"cur_id", "nome", "sigla"}]
     """
     if not codigo_pessoal:
         return dict(_EMPTY_CARGOS)
+    if _is_estudante(codigo_pessoal):
+        return _obter_cargos_estudante(sess, codigo_pessoal)
     url = f"{SIGARRA_BASE}/func_geral.formview?p_codigo={codigo_pessoal}"
     try:
         html_str = sess.fetch_html(url, timeout=20)

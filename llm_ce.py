@@ -22,6 +22,8 @@ from pathlib import Path
 import anthropic
 from openai import OpenAI
 
+from bs4 import BeautifulSoup
+
 from sigarra import load_env
 from logger import AuditoriaLogger
 
@@ -29,6 +31,21 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROMPTS_DIR = _SCRIPT_DIR / "prompts"
 
 _SYSTEM_PROMPT: str | None = None
+
+
+def _preprocess_relatorio_html(html: str) -> str:
+    """Converte <input type="text" value="..."> em texto legível pelo LLM.
+
+    Os relatórios do SIGARRA usam inputs readonly para dados de empregabilidade
+    inseridos manualmente. O LLM não lê atributos value — converte para <span>.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for inp in soup.find_all("input", {"type": "text"}):
+        val = (inp.get("value") or "").strip()
+        span = soup.new_tag("span")
+        span.string = val if val else "—"
+        inp.replace_with(span)
+    return str(soup)
 
 
 def _carregar_system_prompt() -> str:
@@ -387,6 +404,7 @@ def analisar_relatorio_ce(
     load_env()
     _garantir_api_key(provider)
     system = _carregar_system_prompt()
+    relatorio_html = _preprocess_relatorio_html(relatorio_html)
 
     user_text = (
         f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
