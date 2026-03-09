@@ -59,5 +59,6 @@ while true; do
         "$VENV_PIP" install -q -r "$ROOT/requirements.txt" && log "Dependências OK." || log "AVISO: pip falhou."
     fi
     sudo systemctl restart ucreports-ce
+    rm -f "$ROOT/.draining"
     log "Deploy concluído: ${REMOTE:0:8}"
 done
