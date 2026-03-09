@@ -378,7 +378,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Assistente de Apoio à Análise e Elaboração de Pareceres sobre Relatórios de Ciclos de Estudos</title>
+  <title>Assistente de Apoio à Elaboração de Parecers sobre Relatórios de Ciclos de Estudos</title>
   <link rel="icon" type="image/svg+xml" href="{url_for('favicon_svg')}">
   <style>
     :root {{
@@ -618,7 +618,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
 <div class="container">
   <header class="app-header">
     <div class="app-brandrow">
-      <span class="app-brand">Assistente de Apoio à Análise e Elaboração de Pareceres sobre Relatórios de Ciclos de Estudos</span>
+      <span class="app-brand">Assistente de Apoio à Elaboração de Pareceres sobre Relatórios de Ciclos de Estudos</span>
     </div>
     <div class="app-subtitle">FEUP · Melhoria Contínua</div>
   </header>
