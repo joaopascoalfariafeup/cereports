@@ -90,6 +90,7 @@ class Tarefa:
     started_at: float
     ce_nome: str = ""
     ano_letivo: str = ""
+    pv_id: str = ""
     user_code: str = ""
     llm_provider: str = ""
     llm_modelo: str = ""
@@ -1265,11 +1266,25 @@ def ces():
 # Iniciar job
 # ---------------------------------------------------------------------------
 
-def _run_job(job: Tarefa, relatorio_html: str, verbosidade: int) -> None:
+def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
     """Executa a análise e marca o job como concluído."""
     try:
         with AuditoriaLogger(job.log_path, verbosidade=verbosidade) as log:
             log.cabecalho(job.job_id, usuario=job.user_code)
+
+            # Fase 1 — obter relatório do SIGARRA
+            log.iniciar_fase("sigarra", "A obter relatório do SIGARRA...")
+            try:
+                relatorio_html = obter_relatorio_ce_html(job.pv_id, sess)
+                log.concluir_fase(
+                    "sigarra",
+                    f"Relatório obtido ({len(relatorio_html) // 1024} KB)",
+                )
+            except Exception as e:
+                log.concluir_fase("sigarra", f"Falha ao obter relatório: {e}", ok=False)
+                raise
+
+            # Fase 2 — análise por LLM (logada internamente por analisar_ce)
             analisar_ce(
                 relatorio_html=relatorio_html,
                 ce_nome=job.ce_nome,
@@ -1322,23 +1337,6 @@ def start_job():
           <p><a href="{url_for('ces')}">Voltar</a></p>
         </div>""")
 
-    # Obter HTML do relatório a partir do SIGARRA (autenticado)
-    try:
-        relatorio_html = obter_relatorio_ce_html(pv_id, sess)
-    except Exception as e:
-        return _page("Erro", f"""
-        <div class="card">
-          <p class="status-err">Não foi possível obter o relatório do SIGARRA: {_esc(e)}</p>
-          <p><a href="{url_for('ces')}">Voltar</a></p>
-        </div>""")
-
-    if len(relatorio_html) < 200:
-        return _page("Erro", f"""
-        <div class="card">
-          <p class="status-err">O relatório obtido parece estar vazio ou inválido.</p>
-          <p><a href="{url_for('ces')}">Voltar</a></p>
-        </div>""")
-
     # Provider / modelo
     llm_provider = (os.environ.get("LLM_PROVIDER", "anthropic") or "anthropic").strip().lower()
     llm_modelo = _default_modelo_por_provider(llm_provider)
@@ -1378,6 +1376,7 @@ def start_job():
         started_at=time.time(),
         ce_nome=ce_nome,
         ano_letivo=_format_ano_letivo_display(ano_letivo),
+        pv_id=pv_id,
         user_code=(sess.codigo_pessoal or "").strip(),
         llm_provider=llm_provider,
         llm_modelo=llm_modelo,
@@ -1389,7 +1388,7 @@ def start_job():
 
     t = threading.Thread(
         target=_run_job,
-        args=(job, relatorio_html, WEB_VERBOSIDADE),
+        args=(job, sess, WEB_VERBOSIDADE),
         daemon=True,
     )
     t.start()

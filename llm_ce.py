@@ -183,7 +183,7 @@ def _chamar_llm_openai_html(
             {"role": "system", "content": system},
             {"role": "user", "content": mensagem_user},
         ],
-        max_completion_tokens=max_tokens,
+        max_tokens=max_tokens,
     )
     usage = resp.usage
     return {

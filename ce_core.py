@@ -7,12 +7,14 @@ Orquestra: HTML relatório → LLM → preview_payload
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from logger import AuditoriaLogger
 from llm_ce import analisar_relatorio_ce
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
+_PROMPTS_DIR = _SCRIPT_DIR / "prompts"
 
 
 def analisar_ce(
@@ -63,6 +65,12 @@ def analisar_ce(
 
     # Guardar HTML do parecer
     (run_dir / "parecer.html").write_text(parecer_html, encoding="utf-8")
+
+    # Copiar system_prompt para auditoria (visível no ZIP)
+    for sp in [_PROMPTS_DIR / "system_prompt.txt", _SCRIPT_DIR / "system_prompt.txt"]:
+        if sp.exists():
+            shutil.copy(sp, run_dir / "system_prompt.txt")
+            break
 
     preview_payload = {
         "ce_nome": ce_nome,
