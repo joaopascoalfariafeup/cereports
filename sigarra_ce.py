@@ -39,10 +39,12 @@ def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
         soup = BeautifulSoup(html_str, "html.parser")
         for th in soup.find_all("th"):
             if re.search(r"\bsigla\b", th.get_text(strip=True), re.I):
-                td = th.find_next_sibling("td")
+                # th e td podem estar na mesma <tr> (não são irmãos directos entre si)
+                row = th.find_parent("tr")
+                td = th.find_next_sibling("td") or (row.find("td") if row else None)
                 if td:
                     sigla = td.get_text(strip=True)
-                    if sigla and 2 <= len(sigla) <= 12:
+                    if sigla and 2 <= len(sigla) <= 16:
                         _SIGLA_CACHE[cur_id] = sigla
                         return sigla
     except Exception:
@@ -74,17 +76,24 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
 
     soup = BeautifulSoup(html_str, "html.parser")
 
-    # Nome do docente — procurar em h1, depois no título da página
+    # Nome do docente — h1 contém o nome institucional (ex: "FEUP"), usar h2
     nome = ""
-    h1 = soup.find("h1")
-    if h1:
-        nome = h1.get_text(strip=True)
+    for tag in ("h2", "h3"):
+        el = soup.find(tag)
+        if el:
+            t = el.get_text(strip=True)
+            # Aceitar se parecer um nome próprio: tem espaço e >5 chars
+            if " " in t and len(t) > 5:
+                nome = t
+                break
     if not nome:
         title_tag = soup.find("title")
         if title_tag:
             m = re.match(r"^([^|\-\(]+)", title_tag.get_text(strip=True))
             if m:
-                nome = m.group(1).strip()
+                candidate = m.group(1).strip()
+                if " " in candidate and len(candidate) > 5:
+                    nome = candidate
 
     # Localizar a secção "Cargos"
     cargos_h3 = soup.find("h3", string=re.compile(r"Cargos", re.I))

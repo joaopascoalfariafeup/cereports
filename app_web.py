@@ -1355,9 +1355,7 @@ def ces():
         cargos_items.append("Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
     for c in cargos["cac_cursos"]:
         label_curso = _esc(c["sigla"] or c["nome"])
-        cargos_items.append(
-            f'{c["papel"]} da Comissão de Acompanhamento — {label_curso} — pode emitir parecer de CA'
-        )
+        cargos_items.append(f'Comissão de Acompanhamento do {label_curso} — pode emitir parecer de CA')
     for cur_id in cargos["director_cur_ids"]:
         nome_dir = _ces_by_id.get(cur_id, cur_id)
         cargos_items.append(
@@ -1376,7 +1374,7 @@ def ces():
           <button type="submit" class="btn-edit" style="margin-left:8px;">Sair do modo</button>
         </form>"""
         cargos_html = f"""<div class="status-err" style="margin:0 0 10px;padding:8px 12px;border-radius:6px;font-size:0.9em;">
-          <strong>Modo impersonação:</strong> {docente_label}{impersonate_banner}
+          <strong>Assumindo o papel de:</strong> {docente_label}{impersonate_banner}
           {cargos_li_html}
         </div>"""
     else:
