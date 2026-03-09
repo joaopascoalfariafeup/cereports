@@ -32,7 +32,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -765,10 +765,52 @@ function setupEditableBlocks() {
   });
 }
 
+function setupCeYearLoader() {
+  const ceSelect = _byId('ce_nome');
+  const anoSelect = _byId('ano_letivo');
+  if (!ceSelect || !anoSelect) return;
+
+  function loadYears(curId) {
+    if (!curId) return;
+    fetch('/api/relatorios_ce/' + encodeURIComponent(curId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.anos || data.anos.length === 0) return;
+        const currentVal = anoSelect.value;
+        anoSelect.innerHTML = '';
+        data.anos.forEach(function(a) {
+          const opt = document.createElement('option');
+          opt.value = a.value;
+          opt.textContent = a.label;
+          if (a.value === currentVal) opt.selected = true;
+          anoSelect.appendChild(opt);
+        });
+        // Default: selecionar o mais recente (primeiro da lista)
+        if (!anoSelect.value && data.anos.length > 0) {
+          anoSelect.value = data.anos[0].value;
+        }
+      })
+      .catch(function() { /* sem relatórios ou erro de rede: manter opções padrão */ });
+  }
+
+  ceSelect.addEventListener('change', function() {
+    const opt = ceSelect.options[ceSelect.selectedIndex];
+    const curId = opt ? opt.dataset.curId : '';
+    if (curId) loadYears(curId);
+  });
+
+  // Carregar imediatamente se já existir um CE selecionado (ex: volta da sessão)
+  const selOpt = ceSelect.options[ceSelect.selectedIndex];
+  if (selOpt && selOpt.value && selOpt.dataset.curId) {
+    loadYears(selOpt.dataset.curId);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupLogin();
   setupProgressSSE();
   setupEditableBlocks();
+  setupCeYearLoader();
 });
 """
     r = Response(js, mimetype="application/javascript")
@@ -1057,6 +1099,29 @@ def logout():
 
 
 # ---------------------------------------------------------------------------
+# API: relatórios disponíveis para um CE (chamado via fetch do browser)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/relatorios_ce/<cur_id>")
+def api_relatorios_ce(cur_id: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return Response('{"error":"unauthorized"}', status=401, mimetype="application/json")
+    if not re.match(r'^\d+$', cur_id):
+        return Response('{"error":"invalid"}', status=400, mimetype="application/json")
+
+    relatorios = listar_relatorios_ce(cur_id)
+    anos = []
+    for r in relatorios:
+        ano = r["ano"]
+        y = int(ano)
+        label = f"{y}/{(y + 1) % 100:02d}"
+        anos.append({"value": ano, "label": label})
+
+    return Response(json.dumps({"anos": anos}), mimetype="application/json")
+
+
+# ---------------------------------------------------------------------------
 # Seleção de CE
 # ---------------------------------------------------------------------------
 
@@ -1118,7 +1183,10 @@ def ces():
             optgroups += f'<optgroup label="{_TIPO_LABELS[tipo]}">'
             for ce in ces_tipo:
                 sel = " selected" if ce["nome"] == last_ce_nome else ""
-                optgroups += f'<option value="{_esc(ce["nome"])}"{sel}>{_esc(ce["nome"])}</option>'
+                optgroups += (
+                    f'<option value="{_esc(ce["nome"])}" data-cur-id="{_esc(ce["cur_id"])}"{sel}>'
+                    f'{_esc(ce["nome"])}</option>'
+                )
             optgroups += "</optgroup>"
         ce_field_html = f"""
         <div class="form-row-inline">

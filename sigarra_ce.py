@@ -93,6 +93,74 @@ def listar_ces_publicos() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Lista de relatórios disponíveis para um CE (sem autenticação)
+# ---------------------------------------------------------------------------
+
+SIGARRA_RELCURS_URL = "https://sigarra.up.pt/feup/pt/relcur_geral.show_relcurs?pv_curso_id={}"
+
+_RELCURS_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_RELCURS_CACHE_TTL = 3600  # 1 hora
+
+
+def listar_relatorios_ce(cur_id: str) -> list[dict]:
+    """Obtém lista de relatórios pedagógicos disponíveis para um curso no SIGARRA.
+
+    Faz scraping de
+    https://sigarra.up.pt/feup/pt/relcur_geral.show_relcurs?pv_curso_id=NNN
+
+    Returns:
+        Lista de dicts com campos: pv_id (str), ano (str, ex: ``"2024"``).
+        Ordenados do mais recente para o mais antigo.
+        Em caso de falha de rede devolve lista vazia.
+        Resultado em cache durante 1 hora por cur_id.
+    """
+    global _RELCURS_CACHE
+
+    now = time.time()
+    if cur_id in _RELCURS_CACHE:
+        ts, cached = _RELCURS_CACHE[cur_id]
+        if (now - ts) < _RELCURS_CACHE_TTL:
+            return cached
+
+    url = SIGARRA_RELCURS_URL.format(cur_id)
+    try:
+        req = _req.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; CEReports/1.0)"},
+        )
+        resp = _req.urlopen(req, timeout=15)
+        charset = resp.headers.get_content_charset() or "utf-8"
+        html_str = resp.read().decode(charset, errors="replace")
+    except Exception:
+        return []
+
+    soup = BeautifulSoup(html_str, "html.parser")
+    resultado: list[dict] = []
+
+    for a in soup.find_all("a", href=re.compile(r"relcur_geral\.proc_edit\?pv_id=")):
+        href = a.get("href", "")
+        m_id = re.search(r"pv_id=(\d+)", href)
+        if not m_id:
+            continue
+        texto = a.get_text(strip=True)
+        m_ano = re.search(r"--\s*(\d{4})\s*$", texto)
+        if not m_ano:
+            continue
+        resultado.append({
+            "pv_id": m_id.group(1),
+            "ano": m_ano.group(1),
+        })
+
+    # Mais recentes primeiro
+    resultado.sort(key=lambda x: x["ano"], reverse=True)
+
+    if resultado:
+        _RELCURS_CACHE[cur_id] = (now, resultado)
+
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # URLs dos CEs no SIGARRA
 # ---------------------------------------------------------------------------
 
