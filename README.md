@@ -27,7 +27,7 @@ sigarra.py          # Sessão autenticada SIGARRA
 llm_ce.py           # Integração com LLMs (Anthropic, OpenAI, IAedu)
 ce_core.py          # Pipeline: HTML relatório → LLM → parecer
 logger.py           # Logger dual (terminal + ficheiro), métricas LLM
-system_prompt.txt   # Prompt de sistema do LLM
+prompts/            # Prompts de sistema do LLM (system_prompt.txt, system_prompt_v1.txt)
 requirements.txt    # Dependências Python
 .env.public         # Configuração pública (versionada)
 .env                # Segredos — NÃO versionado
