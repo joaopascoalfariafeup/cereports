@@ -15,6 +15,80 @@ from sigarra import SigarraSession, SIGARRA_BASE
 
 
 # ---------------------------------------------------------------------------
+# Cargos relevantes do docente (para mostrar na página de seleção)
+# ---------------------------------------------------------------------------
+
+_EMPTY_CARGOS: dict = {"is_cp": False, "is_cc": False, "cac_cursos": [], "director_cur_ids": []}
+
+
+def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
+    """Obtém cargos relevantes do docente da sua página pessoal SIGARRA.
+
+    Faz fetch de func_geral.formview?p_codigo=<codigo> e extrai da tabela
+    "Cargos" os papéis relevantes para emissão de pareceres de CEs.
+
+    Returns dict com:
+      is_cp           bool  — membro do Conselho Pedagógico da FEUP
+      is_cc           bool  — membro do Conselho Científico da FEUP
+      cac_cursos      list  — [{"cur_id", "nome", "papel"}] comissão de acompanhamento
+      director_cur_ids list — [cur_id, ...] cursos em que é diretor (conflito)
+    """
+    url = f"{SIGARRA_BASE}/func_geral.formview?p_codigo={codigo_pessoal}"
+    try:
+        html_str = sess.fetch_html(url, timeout=20)
+    except Exception:
+        return dict(_EMPTY_CARGOS)
+
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    # Localizar a secção "Cargos"
+    cargos_h3 = soup.find("h3", string=re.compile(r"Cargos", re.I))
+    if not cargos_h3:
+        return dict(_EMPTY_CARGOS)
+    table = cargos_h3.find_next("table")
+    if not table:
+        return dict(_EMPTY_CARGOS)
+
+    is_cp = False
+    is_cc = False
+    cac_cursos: list[dict] = []
+    director_cur_ids: list[str] = []
+
+    for row in table.find_all("tr"):
+        td = row.find("td", class_="k")
+        if not td:
+            continue
+        text = td.get_text(separator=" ", strip=True)
+        tl = text.lower()
+
+        # Extrair link de curso, se presente
+        a = td.find("a", href=re.compile(r"pv_curso_id=\d+", re.I))
+        cur_id = cur_nome = None
+        if a:
+            m = re.search(r"pv_curso_id=(\d+)", a.get("href", ""), re.I)
+            if m:
+                cur_id = m.group(1)
+                cur_nome = a.get_text(strip=True)
+
+        if re.search(r"conselho\s+pedag[oó]gico", tl) and "comiss" not in tl:
+            is_cp = True
+        elif re.search(r"conselho\s+cient[ií]fico", tl) and "comiss" not in tl:
+            is_cc = True
+        elif re.search(r"comiss[aã]o\s+de\s+acompanhamento", tl) and cur_id:
+            papel = "Presidente" if "presidente" in tl else "Membro"
+            cac_cursos.append({"cur_id": cur_id, "nome": cur_nome, "papel": papel})
+        elif re.search(r"diretor\s+de\s+(curso|mestrado|doutoramento|licenciatura)", tl) and cur_id:
+            director_cur_ids.append(cur_id)
+
+    return {
+        "is_cp": is_cp,
+        "is_cc": is_cc,
+        "cac_cursos": cac_cursos,
+        "director_cur_ids": director_cur_ids,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Lista pública de CEs (sem autenticação) — página oficial SIGARRA/FEUP
 # ---------------------------------------------------------------------------
 

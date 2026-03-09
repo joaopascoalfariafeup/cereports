@@ -32,7 +32,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -842,10 +842,21 @@ function setupCeYearLoader() {
       .catch(function() { populateAnos(getFallbackAnos()); });
   }
 
+  // Aviso de conflito de diretor
+  const form = ceSelect.closest('form');
+  const directorIds = (function() {
+    try { return JSON.parse((form && form.dataset.directorIds) || '[]'); } catch(e) { return []; }
+  })();
+  const dirWarning = _byId('director-warning');
+  function updateDirectorWarning(curId) {
+    if (dirWarning) dirWarning.style.display = (directorIds.length && directorIds.includes(curId)) ? '' : 'none';
+  }
+
   ceSelect.addEventListener('change', function() {
     const opt = ceSelect.options[ceSelect.selectedIndex];
     const curId = opt ? (opt.dataset.curId || '') : '';
     loadYears(curId);
+    updateDirectorWarning(curId);
   });
 
   anoSelect.addEventListener('change', syncPvId);
@@ -854,6 +865,7 @@ function setupCeYearLoader() {
   const selOpt = ceSelect.options[ceSelect.selectedIndex];
   const initCurId = (selOpt && selOpt.dataset.curId) ? selOpt.dataset.curId : '';
   loadYears(initCurId);
+  updateDirectorWarning(initCurId);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1290,6 +1302,35 @@ def ces():
 
     # --- Dropdown de CEs a partir da página pública do SIGARRA ---
     ces_list = listar_ces_publicos()
+
+    # --- Cargos relevantes do utilizador ---
+    cargos = obter_cargos_docente(sess, sess.codigo_pessoal or "")
+    director_cur_ids_json = _esc(json.dumps(cargos["director_cur_ids"]))
+    _ces_by_id = {c["cur_id"]: c["nome"] for c in ces_list}
+
+    cargos_items = []
+    if cargos["is_cp"]:
+        cargos_items.append("Membro do Conselho Pedagógico — pode emitir parecer CP de licenciaturas e mestrados")
+    if cargos["is_cc"]:
+        cargos_items.append("Membro do Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
+    for c in cargos["cac_cursos"]:
+        cargos_items.append(
+            f'{c["papel"]} da Comissão de Acompanhamento — {_esc(c["nome"])}'
+            f' — pode emitir parecer de acompanhamento'
+        )
+    for cur_id in cargos["director_cur_ids"]:
+        nome_dir = _ces_by_id.get(cur_id, cur_id)
+        cargos_items.append(
+            f'<span class="status-err">&#9888; Diretor de curso — {_esc(nome_dir)} — não deve emitir parecer</span>'
+        )
+
+    if cargos_items:
+        cargos_li = "".join(f"<li>{item}</li>" for item in cargos_items)
+        cargos_html = f'<ul class="muted" style="margin:0 0 4px;padding-left:20px;font-size:0.9em;">{cargos_li}</ul>'
+    elif sess.codigo_pessoal:
+        cargos_html = '<p class="muted" style="margin:0 0 4px;font-size:0.9em;">Sem cargos relevantes identificados no SIGARRA.</p>'
+    else:
+        cargos_html = ""
     last_ce_nome = flask_session.get("last_ce_nome", "")
     if ces_list:
         _TIPO_LABELS = {"L": "Licenciaturas", "M": "Mestrados", "D": "Doutoramentos"}
@@ -1326,10 +1367,16 @@ def ces():
 
     body = f"""
     <div class="card">
-      <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data" style="margin-top:4px;">
+      {cargos_html}
+      <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data"
+            style="margin-top:4px;" data-director-ids="{director_cur_ids_json}">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
 
         {ce_field_html}
+
+        <p class="status-err" id="director-warning" style="display:none;margin:4px 0 0 160px;font-size:0.9em;">
+          &#9888; É diretor deste curso — não deve emitir parecer.
+        </p>
 
         <div class="form-row-inline">
           <label for="ano_letivo">Ano letivo:</label>
