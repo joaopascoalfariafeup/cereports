@@ -618,6 +618,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
       border-radius: 6px;
       cursor: pointer;
     }}
+    .btn-cancel-edit.visible {{ display: inline-flex !important; }}
     .btn-cancel-edit:hover {{ background: #f3f4f6; color: var(--fg); }}
     .edit-counter {{
       display: none;
@@ -628,6 +629,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
       border-radius: 6px;
       background: #fff;
     }}
+    .edit-counter.visible {{ display: inline !important; }}
     .edit-counter.over-limit {{ color: var(--err); border-color: var(--err); background: #fef2f2; }}
     ul {{ margin: 8px 0 0 18px; padding: 0; }}
     li {{ margin: 4px 0; }}
@@ -763,8 +765,8 @@ function setupEditableBlocks() {
         block.contentEditable = 'false';
         btnEdit.textContent = 'Editar';
         btnEdit.classList.remove('editing');
-        if (btnCancel) { btnCancel.style.display = 'none'; }
-        if (counter) { counter.style.display = 'none'; }
+        if (btnCancel) { btnCancel.classList.remove('visible'); }
+        if (counter) { counter.classList.remove('visible'); }
         if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       } else {
         original = block.innerHTML;
@@ -772,8 +774,8 @@ function setupEditableBlocks() {
         block.focus();
         btnEdit.textContent = 'Guardar';
         btnEdit.classList.add('editing');
-        if (btnCancel) { btnCancel.style.display = 'inline-flex'; }
-        if (counter) { counter.style.display = 'inline'; updateCounter(); }
+        if (btnCancel) { btnCancel.classList.add('visible'); }
+        if (counter) { counter.classList.add('visible'); updateCounter(); }
       }
     });
 
@@ -783,8 +785,8 @@ function setupEditableBlocks() {
         block.contentEditable = 'false';
         btnEdit.textContent = 'Editar';
         btnEdit.classList.remove('editing');
-        btnCancel.style.display = 'none';
-        if (counter) { counter.style.display = 'none'; }
+        btnCancel.classList.remove('visible');
+        if (counter) { counter.classList.remove('visible'); }
         if (hidden) hidden.value = original;
         if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       });
