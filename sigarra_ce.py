@@ -37,13 +37,16 @@ def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
     try:
         html_str = sess.fetch_html(url, timeout=15)
         soup = BeautifulSoup(html_str, "html.parser")
-        for th in soup.find_all("th"):
-            if re.search(r"\bsigla\b", th.get_text(strip=True), re.I):
-                # th e td podem estar na mesma <tr> (não são irmãos directos entre si)
-                row = th.find_parent("tr")
-                td = th.find_next_sibling("td") or (row.find("td") if row else None)
-                if td:
-                    sigla = td.get_text(strip=True)
+        # SIGARRA usa <td class="k"> como label (não <th>); pesquisar ambos
+        for label_el in soup.find_all(["th", "td"]):
+            if re.search(r"\bsigla\b", label_el.get_text(strip=True), re.I):
+                row = label_el.find_parent("tr")
+                # Próximo <td> irmão, ou qualquer <td> na mesma linha que não seja o label
+                value_el = label_el.find_next_sibling("td")
+                if not value_el and row:
+                    value_el = next((t for t in row.find_all("td") if t is not label_el), None)
+                if value_el:
+                    sigla = value_el.get_text(strip=True)
                     if sigla and 2 <= len(sigla) <= 16:
                         _SIGLA_CACHE[cur_id] = sigla
                         return sigla
@@ -76,24 +79,35 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
 
     soup = BeautifulSoup(html_str, "html.parser")
 
-    # Nome do docente — h1 contém o nome institucional (ex: "FEUP"), usar h2
+    # Nome do docente — várias estratégias por ordem de fiabilidade
     nome = ""
-    for tag in ("h2", "h3"):
-        el = soup.find(tag)
-        if el:
-            t = el.get_text(strip=True)
-            # Aceitar se parecer um nome próprio: tem espaço e >5 chars
-            if " " in t and len(t) > 5:
-                nome = t
+    # 1. Elemento com "nome" na classe (padrão SIGARRA para páginas pessoais)
+    for el in soup.find_all(class_=re.compile(r"nome", re.I)):
+        t = el.get_text(strip=True)
+        if " " in t and 6 < len(t) < 100:
+            nome = t
+            break
+    # 2. h2 / h3 com aspecto de nome próprio (exclui "FEUP" e similares)
+    if not nome:
+        for tag in ("h2", "h3"):
+            for el in soup.find_all(tag):
+                t = el.get_text(strip=True)
+                if " " in t and 6 < len(t) < 100:
+                    nome = t
+                    break
+            if nome:
                 break
+    # 3. Título da página (ex: "João Carlos Pascoal Faria - SIGARRA")
     if not nome:
         title_tag = soup.find("title")
         if title_tag:
-            m = re.match(r"^([^|\-\(]+)", title_tag.get_text(strip=True))
-            if m:
-                candidate = m.group(1).strip()
-                if " " in candidate and len(candidate) > 5:
-                    nome = candidate
+            # Tentar obter a parte que parece um nome (antes de " - " ou "| SIGARRA")
+            raw = title_tag.get_text(strip=True)
+            for part in re.split(r"\s*[-|]\s*", raw):
+                part = part.strip()
+                if " " in part and 6 < len(part) < 100 and not re.search(r"(sigarra|porto|feup)", part, re.I):
+                    nome = part
+                    break
 
     # Localizar a secção "Cargos"
     cargos_h3 = soup.find("h3", string=re.compile(r"Cargos", re.I))
