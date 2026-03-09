@@ -1,0 +1,15 @@
+[Unit]
+Description=CEReports Auto-Deployer
+After=ucreports-ce.service
+Requires=network-online.target
+
+[Service]
+Type=simple
+User=coursemonitoring
+WorkingDirectory=/home/coursemonitoring/cereports
+ExecStart=/bin/bash /home/coursemonitoring/cereports/deployer.sh 60
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

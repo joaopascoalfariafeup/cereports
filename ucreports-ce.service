@@ -1,0 +1,16 @@
+[Unit]
+Description=UCReports CE — Pareceres sobre Relatórios de Ciclos de Estudos da FEUP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coursemonitoring
+WorkingDirectory=/home/coursemonitoring/cereports
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/coursemonitoring/cereports-venv/bin/waitress-serve --host=127.0.0.1 --port=5001 --threads=4 app_web:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+flask
+flask-limiter
+waitress
+beautifulsoup4
+anthropic
+openai
+pypdf

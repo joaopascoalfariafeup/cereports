@@ -1,0 +1,76 @@
+===Instalação em máquina virtual Linux===
+
+Name: coursemonitoring.fe.up.pt
+IP: 10.227.243.108
+User: coursemonitoring@coursemonitoring.fe.up.pt
+
+Project directory: /home/coursemonitoring/cereports
+Service name: ucreports-ce
+Virtual env: ~/cereports-venv
+Port: 5001
+URL: https://ce.uc-reports.com
+
+1. System packages (se ainda não instalados)
+
+sudo apt update
+sudo apt install python3-venv python3-pip
+
+2. Clone do repositório
+
+cd /home/coursemonitoring
+git clone https://github.com/joaopascoalfariafeup/cereports cereports
+
+3. Python venv + dependências
+
+python3 -m venv ~/cereports-venv
+source ~/cereports-venv/bin/activate
+pip install -r /home/coursemonitoring/cereports/requirements.txt
+
+4. Configurar .env
+
+# Copiar do PC local via scp:
+scp .env coursemonitoring@coursemonitoring.fe.up.pt:/home/coursemonitoring/cereports/
+
+# Conteúdo mínimo:
+# WEB_SECRET_KEY=<token aleatório>
+# ANTHROPIC_API_KEY=<chave>
+# IAEDU_API_KEY=<chave>
+# IAEDU_ENDPOINT=<endpoint>
+# IAEDU_ID_CANAL=<canal>
+
+5. Serviço systemd
+
+sudo cp /home/coursemonitoring/cereports/ucreports-ce.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable ucreports-ce
+sudo systemctl start ucreports-ce
+
+6. cloudflared — adicionar hostname ce.uc-reports.com
+
+Editar ~/.cloudflared/config.yml e adicionar antes de "- service: http_status:404":
+
+  - hostname: ce.uc-reports.com
+    service: http://127.0.0.1:5001
+
+Reiniciar o tunnel:
+sudo systemctl restart cloudflared
+
+7. Auto-deploy (deployer)
+
+sudo cp /home/coursemonitoring/cereports/deployer.service /etc/systemd/system/ucreports-ce-deployer.service
+sudo systemctl daemon-reload
+sudo systemctl enable ucreports-ce-deployer
+sudo systemctl start ucreports-ce-deployer
+
+8. Sincronização após mudanças
+
+# Automática via deployer (polling do GitHub a cada 60s).
+# Manual:
+cd /home/coursemonitoring/cereports
+git pull
+sudo systemctl restart ucreports-ce
+
+9. Ver logs
+
+sudo journalctl -u ucreports-ce -f
+sudo journalctl -u ucreports-ce-deployer -f
