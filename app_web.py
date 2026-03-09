@@ -1336,14 +1336,13 @@ def ces():
 
     # --- Dropdown de CEs a partir da página pública do SIGARRA ---
     ces_list = listar_ces_publicos()
-    _ces_by_id = {c["cur_id"]: c["nome"] for c in ces_list}
 
     # --- Cargos relevantes do utilizador (admin pode impersonar) ---
     is_admin = _is_admin(sess)
     impersonated = _get_impersonated_code()
     eff_code = _effective_codigo(sess)
     cargos = obter_cargos_docente(sess, eff_code)
-    director_cur_ids_json = _esc(json.dumps(cargos["director_cur_ids"]))
+    director_cur_ids_json = _esc(json.dumps([d["cur_id"] for d in cargos["director_cursos"]]))
 
     nome_docente = cargos.get("nome", "") or eff_code
     docente_label = f'Docente: {_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else ""
@@ -1359,10 +1358,13 @@ def ces():
         s, n = (c["sigla"] or "").upper(), (c["nome"] or "").lower()
         artigo = "da" if s.startswith("L.") or n.startswith("licenciatura") else "do"
         cargos_items.append(f'Comissão de Acompanhamento {artigo} {label_curso} — pode emitir parecer de CA')
-    for cur_id in cargos["director_cur_ids"]:
-        nome_dir = _ces_by_id.get(cur_id, cur_id)
+    for d in cargos["director_cursos"]:
+        s_dir = (d["sigla"] or "").upper()
+        n_dir = (d["nome"] or "").lower()
+        artigo_dir = "da" if s_dir.startswith("L.") or n_dir.startswith("licenciatura") else "do"
+        label_dir = _esc(d["sigla"] or d["nome"] or d["cur_id"])
         cargos_items.append(
-            f'<span class="status-err">&#9888; Diretor de curso — {_esc(nome_dir)} — não deve emitir parecer</span>'
+            f'<span class="status-err">&#9888; Diretor {artigo_dir} {label_dir} — não deve emitir parecer</span>'
         )
 
     cargos_li_html = ""
@@ -1376,8 +1378,9 @@ def ces():
           <input type="hidden" name="impersonate_code" value="">
           <button type="submit" class="btn-edit" style="margin-left:8px;">Sair do modo</button>
         </form>"""
+        nome_impersonado = f'{_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else _esc(eff_code)
         cargos_html = f"""<div class="status-err" style="margin:0 0 10px;padding:8px 12px;border-radius:6px;font-size:0.9em;">
-          <strong>Assumindo o papel de:</strong> {docente_label}{impersonate_banner}
+          <strong>Assumindo o papel de:</strong> {nome_impersonado}{impersonate_banner}
           {cargos_li_html}
         </div>"""
     else:

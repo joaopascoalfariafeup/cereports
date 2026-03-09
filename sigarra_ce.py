@@ -19,7 +19,7 @@ from sigarra import SigarraSession, SIGARRA_BASE
 # ---------------------------------------------------------------------------
 
 _EMPTY_CARGOS: dict = {
-    "nome": "", "is_cp": False, "is_cc": False, "cac_cursos": [], "director_cur_ids": [],
+    "nome": "", "is_cp": False, "is_cc": False, "cac_cursos": [], "director_cursos": [],
 }
 
 _SIGLA_CACHE: dict[str, str] = {}
@@ -120,7 +120,7 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
     is_cp = False
     is_cc = False
     cac_cursos: list[dict] = []
-    director_cur_ids: list[str] = []
+    director_cursos: list[dict] = []
 
     for row in table.find_all("tr"):
         td = row.find("td", class_="k")
@@ -147,14 +147,19 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
             sigla = _obter_sigla_curso(sess, cur_id)
             cac_cursos.append({"cur_id": cur_id, "nome": cur_nome, "sigla": sigla, "papel": papel})
         elif re.search(r"diretor\s+de\s+(curso|mestrado|doutoramento|licenciatura)", tl) and cur_id:
-            director_cur_ids.append(cur_id)
+            sigla = _obter_sigla_curso(sess, cur_id)
+            director_cursos.append({"cur_id": cur_id, "nome": cur_nome, "sigla": sigla})
+
+    # Diretores de curso são por inerência membros da CA — remover duplicados
+    director_ids = {d["cur_id"] for d in director_cursos}
+    cac_cursos = [c for c in cac_cursos if c["cur_id"] not in director_ids]
 
     return {
         "nome": nome,
         "is_cp": is_cp,
         "is_cc": is_cc,
         "cac_cursos": cac_cursos,
-        "director_cur_ids": director_cur_ids,
+        "director_cursos": director_cursos,
     }
 
 
