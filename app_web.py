@@ -164,6 +164,23 @@ def _format_model_cost(provider: str) -> str:
     return ""
 
 
+def _extrair_custo_estimado_valor(log_path: Path) -> float:
+    try:
+        txt = log_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return 0.0
+    matches = re.findall(r"Custo estimado:\s*\$([0-9]+(?:\.[0-9]+)?)", txt)
+    if not matches:
+        return 0.0
+    total = 0.0
+    for m in matches:
+        try:
+            total += float(m)
+        except ValueError:
+            continue
+    return total
+
+
 # ---------------------------------------------------------------------------
 # Helpers: formatação e UI
 # ---------------------------------------------------------------------------
@@ -712,16 +729,32 @@ function setupProgressSSE() {
 }
 
 function setupEditableBlocks() {
-  document.querySelectorAll('[data-editable-id]').forEach(container => {
-    const id = container.dataset.editableId;
-    const block = container.querySelector('.preview-html[data-field="' + id + '"]');
-    const btnEdit = container.querySelector('.btn-edit');
-    const btnCancel = container.querySelector('.btn-cancel-edit');
-    const counter = container.querySelector('.edit-counter');
+  const MAX_CHARS = 10000;
+  document.querySelectorAll('.editable-header[data-editable-id]').forEach(header => {
+    const id = header.dataset.editableId;
+    const block = document.querySelector('.preview-html[data-field="' + id + '"]');
+    const btnEdit = header.querySelector('.btn-edit');
+    const btnCancel = header.querySelector('.btn-cancel-edit');
+    const counter = header.querySelector('.edit-counter');
     const hidden = document.getElementById('field_' + id);
+    const form = hidden ? hidden.closest('form') : null;
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
     if (!block || !btnEdit) return;
 
     let original = block.innerHTML;
+
+    function updateCounter() {
+      if (!counter) return;
+      const len = block.innerHTML.length;
+      counter.textContent = len + ' / ' + MAX_CHARS;
+      if (len > MAX_CHARS) {
+        counter.classList.add('over-limit');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.title = 'O parecer excede o limite de ' + MAX_CHARS + ' carateres.'; }
+      } else {
+        counter.classList.remove('over-limit');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
+      }
+    }
 
     btnEdit.addEventListener('click', () => {
       if (block.contentEditable === 'true') {
@@ -732,6 +765,7 @@ function setupEditableBlocks() {
         btnEdit.classList.remove('editing');
         if (btnCancel) { btnCancel.style.display = 'none'; }
         if (counter) { counter.style.display = 'none'; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       } else {
         original = block.innerHTML;
         block.contentEditable = 'true';
@@ -752,16 +786,21 @@ function setupEditableBlocks() {
         btnCancel.style.display = 'none';
         if (counter) { counter.style.display = 'none'; }
         if (hidden) hidden.value = original;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       });
     }
 
-    function updateCounter() {
-      if (!counter) return;
-      const len = block.textContent.length;
-      counter.textContent = len + ' chars';
-    }
     if (counter) {
       block.addEventListener('input', updateCounter);
+    }
+
+    // Garantir que o conteúdo editado é guardado mesmo se o form for submetido em modo edição
+    if (form) {
+      form.addEventListener('submit', () => {
+        if (block.contentEditable === 'true' && hidden) {
+          hidden.value = block.innerHTML;
+        }
+      });
     }
   });
 }
@@ -1512,6 +1551,8 @@ def progress(job_id: str):
     """
 
     if job.done and job.ok:
+        custo = _extrair_custo_estimado_valor(job.log_path) if job.log_path.exists() else 0.0
+        custo_html = f'<p class="muted" style="margin:6px 0 0;">Custo LLM estimado: ${custo:.4f}</p>' if custo > 0 else ""
         body += f"""
         <div class="card">
           <div class="navbar">
@@ -1522,6 +1563,7 @@ def progress(job_id: str):
               <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar (.zip)</a>
             </div>
           </div>
+          {custo_html}
         </div>
         """
     elif job.done:
@@ -1656,8 +1698,7 @@ def preview(job_id: str):
             <button type="button" class="btn-edit" id="edit-parecer">Editar</button>
           </div>
         </div>
-        <div class="preview-html" id="parecer-block" data-field="parecer"
-             data-editable-id="parecer">{parecer_html}</div>
+        <div class="preview-html" id="parecer-block" data-field="parecer">{parecer_html}</div>
       </div>
 
       <div class="card">
@@ -1671,55 +1712,6 @@ def preview(job_id: str):
         </div>
       </div>
     </form>
-    """
-
-    # Inicializar JS de edição inline via data-attributes
-    body += f"""
-    <script>
-    (function() {{
-      const container = document.querySelector('[data-editable-id="parecer"]');
-      if (!container) return;
-      const block = document.getElementById('parecer-block');
-      const btnEdit = document.getElementById('edit-parecer');
-      const btnCancel = document.getElementById('cancel-parecer');
-      const counter = document.getElementById('counter-parecer');
-      const hidden = document.getElementById('field_parecer');
-      if (!block || !btnEdit) return;
-      let original = block.innerHTML;
-      btnEdit.addEventListener('click', () => {{
-        if (block.contentEditable === 'true') {{
-          if (hidden) hidden.value = block.innerHTML;
-          block.contentEditable = 'false';
-          btnEdit.textContent = 'Editar';
-          btnEdit.classList.remove('editing');
-          if (btnCancel) btnCancel.style.display = 'none';
-          if (counter) counter.style.display = 'none';
-        }} else {{
-          original = block.innerHTML;
-          block.contentEditable = 'true';
-          block.focus();
-          btnEdit.textContent = 'Guardar';
-          btnEdit.classList.add('editing');
-          if (btnCancel) btnCancel.style.display = '';
-          if (counter) {{ counter.style.display = ''; counter.textContent = block.textContent.length + ' chars'; }}
-        }}
-      }});
-      if (btnCancel) {{
-        btnCancel.addEventListener('click', () => {{
-          block.innerHTML = original;
-          block.contentEditable = 'false';
-          btnEdit.textContent = 'Editar';
-          btnEdit.classList.remove('editing');
-          btnCancel.style.display = 'none';
-          if (counter) counter.style.display = 'none';
-          if (hidden) hidden.value = original;
-        }});
-      }}
-      if (counter) {{
-        block.addEventListener('input', () => {{ counter.textContent = block.textContent.length + ' chars'; }});
-      }}
-    }})();
-    </script>
     """
 
     return _page("Parecer", body, step=3)

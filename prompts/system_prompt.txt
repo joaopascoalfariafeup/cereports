@@ -37,7 +37,7 @@ O tom deve ser construtivo, respeitoso e orientado para a melhoria. Não repetir
 - HTML simples, sem estilos inline, sem CSS, sem classes.
 - Usar apenas: `<h3>` para secções, `<p>` para parágrafos, `<ul>`/`<li>` para listas.
 - Não usar `<h1>`, `<h2>`, `<strong>`, `<em>`, `<table>`, nem qualquer atributo nos elementos.
-- Limite: aproximadamente **4000 caracteres** (incluindo tags HTML). Sê conciso.
+- Limite máximo: **10 000 caracteres** (contagem do HTML completo, incluindo tags, newlines e espaços). Sê conciso — o objetivo é cobrir os pontos essenciais, não esgotar o limite.
 - Não incluir preâmbulos, explicações do processo, nem a análise SWOT própria — apenas o parecer final.
 - Começar diretamente com o HTML, sem texto fora das tags.
 
