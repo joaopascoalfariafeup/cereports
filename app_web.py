@@ -1749,7 +1749,7 @@ def start_job():
                   <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar</a></p>
                 </div>"""), 403
 
-    if not pv_id or not re.match(r'^\d+$', pv_id):
+    if not pv_id or not re.match(r'^(3c:)?\d+$', pv_id):
         return _page("Erro", f"""
         <div class="card">
           <p class="status-err">Relatório não identificado. Selecione um ciclo de estudos e um ano letivo.</p>

@@ -390,8 +390,9 @@ def listar_relatorios_ce(
             return m.group(1)
         return None
 
-    # Links do tipo relcur_geral.proc_edit?pv_id=NNN (licenciaturas/mestrados)
-    for a in soup.find_all("a", href=re.compile(r"relcur_geral\.proc_edit\?pv_id=", re.I)):
+    # Links do tipo relcur_geral.proc_edit?pv_id=NNN (1º/2º ciclos)
+    # ou relcur_geral.rel3c_edit?pv_id=NNN (3º ciclo — doutoramentos)
+    for a in soup.find_all("a", href=re.compile(r"relcur_geral\.(proc_edit|rel3c_edit)\?pv_id=", re.I)):
         href = a.get("href", "")
         m_id = re.search(r"pv_id=(\d+)", href, re.I)
         if not m_id:
@@ -399,19 +400,10 @@ def listar_relatorios_ce(
         ano = _extrair_ano(a.get_text(strip=True))
         if not ano:
             continue
-        resultado.append({"pv_id": m_id.group(1), "ano": ano})
-
-    # Links do tipo cur_geral.rel_cur_view?pv_cur_id=NNN&pv_ano_letivo=YYYY (doutoramentos)
-    if not resultado:
-        for a in soup.find_all("a", href=re.compile(r"cur_geral\.rel_cur_view", re.I)):
-            href = a.get("href", "")
-            m_cid = re.search(r"pv_cur_id=(\d+)", href, re.I)
-            m_ano_url = re.search(r"pv_ano_letivo=(\d{4})", href, re.I)
-            if not m_cid or not m_ano_url:
-                continue
-            ano = m_ano_url.group(1)
-            # pv_id sintético: "D:<cur_id>:<ano>" — interpretado em obter_relatorio_ce_html
-            resultado.append({"pv_id": f"D:{m_cid.group(1)}:{ano}", "ano": ano})
+        # Prefixo "3c:" para doutoramentos — usado em obter_relatorio_ce_html
+        is_3c = bool(re.search(r"rel3c_edit", href, re.I))
+        pv_id = f"3c:{m_id.group(1)}" if is_3c else m_id.group(1)
+        resultado.append({"pv_id": pv_id, "ano": ano})
 
     # Mais recentes primeiro
     resultado.sort(key=lambda x: x["ano"], reverse=True)
@@ -459,7 +451,12 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
     """
     from bs4 import Comment
 
-    url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
+    # pv_id "3c:NNN" → doutoramento (rel3c_edit); NNN → 1º/2º ciclo (proc_edit)
+    if pv_id.startswith("3c:"):
+        real_id = pv_id[3:]
+        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}&pv_print_ver=S"
+    else:
+        url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
     try:
         html_str = sessao.fetch_html(url, timeout=30)
     except Exception as e:
