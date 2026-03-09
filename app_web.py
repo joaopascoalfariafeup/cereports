@@ -265,6 +265,24 @@ def _is_job_owner(job: Tarefa, sess: SigarraSession) -> bool:
     return bool(owner and current and owner == current)
 
 
+def _admin_codes() -> set[str]:
+    load_env()
+    raw = os.environ.get("ADMIN_CODES", "").strip()
+    return {c.strip() for c in raw.split(",") if c.strip()} if raw else set()
+
+
+def _is_admin(sess: SigarraSession) -> bool:
+    return bool(sess.codigo_pessoal and sess.codigo_pessoal in _admin_codes())
+
+
+def _get_impersonated_code() -> str | None:
+    return flask_session.get("impersonated_code") or None
+
+
+def _effective_codigo(sess: SigarraSession) -> str:
+    return _get_impersonated_code() or sess.codigo_pessoal or ""
+
+
 # ---------------------------------------------------------------------------
 # Housekeeping
 # ---------------------------------------------------------------------------
@@ -1258,6 +1276,22 @@ def api_relatorios_ce(cur_id: str):
 # Seleção de CE
 # ---------------------------------------------------------------------------
 
+@app.post("/impersonate")
+def impersonate():
+    _require_csrf()
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+    if not _is_admin(sess):
+        abort(403)
+    code = request.form.get("impersonate_code", "").strip()
+    if code:
+        flask_session["impersonated_code"] = code
+    else:
+        flask_session.pop("impersonated_code", None)
+    return redirect(url_for("ces"))
+
+
 @app.get("/ces")
 def ces():
     sess = _get_sigarra_session()
@@ -1302,11 +1336,17 @@ def ces():
 
     # --- Dropdown de CEs a partir da página pública do SIGARRA ---
     ces_list = listar_ces_publicos()
-
-    # --- Cargos relevantes do utilizador ---
-    cargos = obter_cargos_docente(sess, sess.codigo_pessoal or "")
-    director_cur_ids_json = _esc(json.dumps(cargos["director_cur_ids"]))
     _ces_by_id = {c["cur_id"]: c["nome"] for c in ces_list}
+
+    # --- Cargos relevantes do utilizador (admin pode impersonar) ---
+    is_admin = _is_admin(sess)
+    impersonated = _get_impersonated_code()
+    eff_code = _effective_codigo(sess)
+    cargos = obter_cargos_docente(sess, eff_code)
+    director_cur_ids_json = _esc(json.dumps(cargos["director_cur_ids"]))
+
+    nome_docente = cargos.get("nome", "") or eff_code
+    docente_label = f'Docente: {_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else ""
 
     cargos_items = []
     if cargos["is_cp"]:
@@ -1314,9 +1354,9 @@ def ces():
     if cargos["is_cc"]:
         cargos_items.append("Conselho Científico — pode emitir parecer CC de licenciaturas, mestrados e doutoramentos")
     for c in cargos["cac_cursos"]:
+        label_curso = _esc(c["sigla"] or c["nome"])
         cargos_items.append(
-            f'{c["papel"]} da Comissão de Acompanhamento — {_esc(c["nome"])}'
-            f' — pode emitir parecer de CA'
+            f'{c["papel"]} da Comissão de Acompanhamento — {label_curso} — pode emitir parecer de CA'
         )
     for cur_id in cargos["director_cur_ids"]:
         nome_dir = _ces_by_id.get(cur_id, cur_id)
@@ -1324,13 +1364,43 @@ def ces():
             f'<span class="status-err">&#9888; Diretor de curso — {_esc(nome_dir)} — não deve emitir parecer</span>'
         )
 
+    cargos_li_html = ""
     if cargos_items:
-        cargos_li = "".join(f"<li>{item}</li>" for item in cargos_items)
-        cargos_html = f'<ul class="muted" style="margin:0 0 4px;padding-left:20px;font-size:0.9em;">{cargos_li}</ul>'
-    elif sess.codigo_pessoal:
-        cargos_html = '<p class="muted" style="margin:0 0 4px;font-size:0.9em;">Sem cargos relevantes identificados no SIGARRA.</p>'
+        cargos_li_html = "<ul style='margin:2px 0 0;padding-left:20px;'>" + "".join(f"<li>{i}</li>" for i in cargos_items) + "</ul>"
+
+    if impersonated:
+        impersonate_banner = f"""
+        <form method="post" action="{url_for('impersonate')}" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{_esc(_get_csrf_token())}">
+          <input type="hidden" name="impersonate_code" value="">
+          <button type="submit" class="btn-edit" style="margin-left:8px;">Sair do modo</button>
+        </form>"""
+        cargos_html = f"""<div class="status-err" style="margin:0 0 10px;padding:8px 12px;border-radius:6px;font-size:0.9em;">
+          <strong>Modo impersonação:</strong> {docente_label}{impersonate_banner}
+          {cargos_li_html}
+        </div>"""
     else:
-        cargos_html = ""
+        cargos_html = f"""<div class="muted" style="margin:0 0 10px;font-size:0.9em;">
+          {f'<strong>{docente_label}</strong>' if docente_label else ''}
+          {cargos_li_html if cargos_li_html else ('<p style="margin:2px 0 0;">Sem cargos relevantes identificados no SIGARRA.</p>' if eff_code else '')}
+        </div>"""
+
+    # --- Impersonação (apenas admin) ---
+    impersonate_html = ""
+    if is_admin:
+        csrf = _get_csrf_token()
+        impersonate_html = f"""
+        <details style="margin:0 0 12px;font-size:0.9em;">
+          <summary style="cursor:pointer;color:var(--muted);">&#9881; Admin — assumir papel de utilizador</summary>
+          <form method="post" action="{url_for('impersonate')}" style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+            <label for="impersonate_code">Código SIGARRA:</label>
+            <input type="text" name="impersonate_code" id="impersonate_code"
+                   placeholder="ex: 210006" value="{_esc(impersonated or '')}"
+                   style="width:120px;" pattern="\\d+" title="Código numérico SIGARRA">
+            <button type="submit" class="btn-edit">Assumir papel</button>
+          </form>
+        </details>"""
     last_ce_nome = flask_session.get("last_ce_nome", "")
     if ces_list:
         _TIPO_LABELS = {"L": "Licenciaturas", "M": "Mestrados", "D": "Doutoramentos"}
@@ -1367,6 +1437,7 @@ def ces():
 
     body = f"""
     <div class="card">
+      {impersonate_html}
       {cargos_html}
       <form method="post" action="{url_for('start_job')}" enctype="multipart/form-data"
             style="margin-top:4px;" data-director-ids="{director_cur_ids_json}">

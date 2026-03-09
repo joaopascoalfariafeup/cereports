@@ -18,7 +18,37 @@ from sigarra import SigarraSession, SIGARRA_BASE
 # Cargos relevantes do docente (para mostrar na página de seleção)
 # ---------------------------------------------------------------------------
 
-_EMPTY_CARGOS: dict = {"is_cp": False, "is_cc": False, "cac_cursos": [], "director_cur_ids": []}
+_EMPTY_CARGOS: dict = {
+    "nome": "", "is_cp": False, "is_cc": False, "cac_cursos": [], "director_cur_ids": [],
+}
+
+_SIGLA_CACHE: dict[str, str] = {}
+
+
+def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
+    """Obtém a sigla de um curso do SIGARRA (com cache em memória).
+
+    Faz fetch de cur_geral.cur_view?pv_curso_id=NNN e procura a linha
+    com label "Sigla". Devolve string vazia se não encontrar.
+    """
+    if cur_id in _SIGLA_CACHE:
+        return _SIGLA_CACHE[cur_id]
+    url = f"{SIGARRA_BASE}/cur_geral.cur_view?pv_curso_id={cur_id}"
+    try:
+        html_str = sess.fetch_html(url, timeout=15)
+        soup = BeautifulSoup(html_str, "html.parser")
+        for th in soup.find_all("th"):
+            if re.search(r"\bsigla\b", th.get_text(strip=True), re.I):
+                td = th.find_next_sibling("td")
+                if td:
+                    sigla = td.get_text(strip=True)
+                    if sigla and 2 <= len(sigla) <= 12:
+                        _SIGLA_CACHE[cur_id] = sigla
+                        return sigla
+    except Exception:
+        pass
+    _SIGLA_CACHE[cur_id] = ""
+    return ""
 
 
 def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
@@ -28,11 +58,14 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
     "Cargos" os papéis relevantes para emissão de pareceres de CEs.
 
     Returns dict com:
-      is_cp           bool  — membro do Conselho Pedagógico da FEUP
-      is_cc           bool  — membro do Conselho Científico da FEUP
-      cac_cursos      list  — [{"cur_id", "nome", "papel"}] comissão de acompanhamento
+      nome            str   — nome completo do docente
+      is_cp           bool  — membro/presidente do Conselho Pedagógico da FEUP
+      is_cc           bool  — membro/presidente do Conselho Científico da FEUP
+      cac_cursos      list  — [{"cur_id", "nome", "sigla", "papel"}] comissão de acompanhamento
       director_cur_ids list — [cur_id, ...] cursos em que é diretor (conflito)
     """
+    if not codigo_pessoal:
+        return dict(_EMPTY_CARGOS)
     url = f"{SIGARRA_BASE}/func_geral.formview?p_codigo={codigo_pessoal}"
     try:
         html_str = sess.fetch_html(url, timeout=20)
@@ -41,13 +74,25 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
 
     soup = BeautifulSoup(html_str, "html.parser")
 
+    # Nome do docente — procurar em h1, depois no título da página
+    nome = ""
+    h1 = soup.find("h1")
+    if h1:
+        nome = h1.get_text(strip=True)
+    if not nome:
+        title_tag = soup.find("title")
+        if title_tag:
+            m = re.match(r"^([^|\-\(]+)", title_tag.get_text(strip=True))
+            if m:
+                nome = m.group(1).strip()
+
     # Localizar a secção "Cargos"
     cargos_h3 = soup.find("h3", string=re.compile(r"Cargos", re.I))
     if not cargos_h3:
-        return dict(_EMPTY_CARGOS)
+        return {**_EMPTY_CARGOS, "nome": nome}
     table = cargos_h3.find_next("table")
     if not table:
-        return dict(_EMPTY_CARGOS)
+        return {**_EMPTY_CARGOS, "nome": nome}
 
     is_cp = False
     is_cc = False
@@ -76,11 +121,13 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
             is_cc = True
         elif re.search(r"comiss[aã]o\s+de\s+acompanhamento", tl) and cur_id:
             papel = "Presidente" if "presidente" in tl else "Membro"
-            cac_cursos.append({"cur_id": cur_id, "nome": cur_nome, "papel": papel})
+            sigla = _obter_sigla_curso(sess, cur_id)
+            cac_cursos.append({"cur_id": cur_id, "nome": cur_nome, "sigla": sigla, "papel": papel})
         elif re.search(r"diretor\s+de\s+(curso|mestrado|doutoramento|licenciatura)", tl) and cur_id:
             director_cur_ids.append(cur_id)
 
     return {
+        "nome": nome,
         "is_cp": is_cp,
         "is_cc": is_cc,
         "cac_cursos": cac_cursos,
