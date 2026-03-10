@@ -347,9 +347,17 @@ def _perspetivas_disponiveis(
     ca_set: set,
     director_set: set,
 ) -> list[dict]:
-    """Devolve lista de {value, label} de perspetivas disponíveis para um CE."""
+    """Devolve lista de {value, label} de perspetivas disponíveis para um CE.
+
+    O diretor de um CE não pode emitir parecer sobre o próprio CE em nome
+    de CC/CP/CA — apenas auto-avaliação (DCE).
+    """
     tipo = ce.get("tipo", "")
     cur_id = ce.get("cur_id", "")
+    # Diretor deste CE: só auto-avaliação (não pode emitir parecer de órgão
+    # sobre um relatório que ele próprio elaborou)
+    if cur_id in director_set:
+        return [{"value": "DCE", "label": "Diretor (auto-avaliação)"}]
     persp: list[dict] = []
     if is_cc:
         persp.append({"value": "CC", "label": "Conselho Científico"})
@@ -357,8 +365,6 @@ def _perspetivas_disponiveis(
         persp.append({"value": "CP", "label": "Conselho Pedagógico"})
     if cur_id in ca_set and tipo == "D":
         persp.append({"value": "CA", "label": "Comissão de Acompanhamento"})
-    if cur_id in director_set:
-        persp.append({"value": "DCE", "label": "Diretor (auto-avaliação)"})
     return persp
 
 
@@ -1856,6 +1862,9 @@ def start_job():
                   <p class="status-err">Não tem permissão para emitir parecer para este ciclo de estudos.</p>
                   <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar</a></p>
                 </div>"""), 403
+            # Diretor deste CE só pode emitir auto-avaliação (DCE)
+            if cur_id in director_ids and perspetiva in ("CC", "CP", "CA"):
+                perspetiva = "DCE"
 
     if not pv_id or not re.match(r'^(3c:)?\d+$', pv_id):
         return _page("Erro", f"""
