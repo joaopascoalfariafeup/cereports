@@ -100,7 +100,20 @@ Se os dados evidenciarem algum indicador potencialmente crítico (por exemplo ab
 Caso não seja mencionado, recomenda que **seja considerado na análise futura**.
 
 
-### 4. Considerar tendências relevantes
+### 4. Comparar com pareceres do ano anterior (se disponíveis)
+
+Se forem fornecidos pareceres emitidos no relatório do ano letivo anterior, verifica:
+
+- se as **recomendações ou sugestões** feitas nesses pareceres foram atendidas no presente relatório (nas propostas de melhoria ou nos "Comentários à concretização das propostas do ano anterior")
+- se existem **questões recorrentes** que voltam a ser identificadas sem progressos visíveis
+- se as melhorias sugeridas anteriormente produziram efeitos observáveis nos dados atuais
+
+Inclui no parecer uma referência explícita a este ponto, quer as recomendações tenham sido atendidas (positivamente) quer não (como recomendação reiterada).
+
+Se não forem fornecidos pareceres anteriores, omite esta análise.
+
+
+### 5. Considerar tendências relevantes
 
 Se houver tendências relevantes nos dados (melhoria ou deterioração ao longo dos anos), comenta-as mesmo que o DCE não o faça.
 
@@ -124,7 +137,9 @@ O parecer deve conter:
 
 2. **Aspetos positivos do relatório** — o que o DCE fez bem na análise SWOT e propostas (2–4 pontos).
 
-3. **Sugestões e recomendações** — aspetos que poderiam ser melhorados, incluindo:
+3. **Seguimento do parecer anterior** (apenas se pareceres anteriores forem fornecidos) — indicar se as recomendações foram atendidas e/ou se há questões recorrentes (1–3 pontos).
+
+4. **Sugestões e recomendações** — aspetos que poderiam ser melhorados, incluindo:
    - omissões relevantes nos pontos fortes ou fracos  
    - dados importantes não comentados  
    - incoerências entre dados e análise  
@@ -132,7 +147,7 @@ O parecer deve conter:
 
    (2–6 pontos)
 
-4. **Conclusão** — apreciação final (favorável / favorável com reservas / desfavorável) com justificação breve (1–2 frases).
+5. **Conclusão** — apreciação final (favorável / favorável com reservas / desfavorável) com justificação breve (1–2 frases).
 
 O tom deve ser **construtivo, respeitoso e orientado para a melhoria**.
 

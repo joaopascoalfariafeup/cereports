@@ -25,6 +25,7 @@ def analisar_ce(
     modelo: str,
     run_dir: Path,
     logger: AuditoriaLogger,
+    pareceres_anteriores: str | None = None,
 ) -> dict:
     """Pipeline de análise de um CE: HTML relatório → LLM → preview_payload.
 
@@ -58,6 +59,7 @@ def analisar_ce(
             provider=provider,
             modelo=modelo,
             logger=logger,
+            pareceres_anteriores=pareceres_anteriores,
         )
         custo_post = logger.total_custo_estimado() or 0.0
         custo_str = f" [~${custo_post - custo_pre:.4f}]" if custo_post > custo_pre else ""

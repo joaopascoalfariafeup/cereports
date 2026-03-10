@@ -32,7 +32,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -221,6 +221,7 @@ class Tarefa:
     ce_nome: str = ""
     ano_letivo: str = ""
     pv_id: str = ""
+    cur_id: str = ""
     user_code: str = ""
     llm_provider: str = ""
     llm_modelo: str = ""
@@ -1654,6 +1655,19 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 log.concluir_fase("sigarra", f"Falha ao obter relatório: {e}", ok=False)
                 raise
 
+            # Fase 1b — pareceres do ano anterior (opcional, falha silenciosa)
+            pareceres_anteriores = None
+            if job.cur_id:
+                try:
+                    ano_raw = job.ano_letivo[:4]
+                    pareceres_anteriores = obter_pareceres_ano_anterior(job.cur_id, ano_raw, sess)
+                    if pareceres_anteriores:
+                        log.info(f"  Pareceres do ano anterior obtidos ({len(pareceres_anteriores)} chars)")
+                    else:
+                        log.info("  Pareceres do ano anterior: não encontrados")
+                except Exception as e:
+                    log.info(f"  Pareceres do ano anterior: erro ({e})")
+
             # Fase 2 — análise por LLM (logada internamente por analisar_ce)
             analisar_ce(
                 relatorio_html=relatorio_html,
@@ -1663,6 +1677,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 modelo=job.llm_modelo,
                 run_dir=job.run_dir,
                 logger=log,
+                pareceres_anteriores=pareceres_anteriores,
             )
         job.ok = True
     except Exception as e:
@@ -1799,6 +1814,7 @@ def start_job():
         ce_nome=ce_nome,
         ano_letivo=_format_ano_letivo_display(ano_letivo),
         pv_id=pv_id,
+        cur_id=cur_id,
         user_code=user_code,
         llm_provider=llm_provider,
         llm_modelo=llm_modelo,

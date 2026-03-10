@@ -387,6 +387,7 @@ def analisar_relatorio_ce(
     provider: str,
     modelo: str,
     logger: AuditoriaLogger | None = None,
+    pareceres_anteriores: str | None = None,
 ) -> str:
     """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
@@ -410,6 +411,11 @@ def analisar_relatorio_ce(
         f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
         f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
+    if pareceres_anteriores:
+        user_text += (
+            f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"
+            f"{pareceres_anteriores}"
+        )
 
     max_tokens = 4096
     max_retries = int(os.environ.get("LLM_MAX_RETRIES", "3") or "3")

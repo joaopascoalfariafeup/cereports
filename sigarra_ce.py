@@ -498,3 +498,68 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
 
     return html_limpo.strip()
 
+
+# ---------------------------------------------------------------------------
+# Pareceres de anos anteriores
+# ---------------------------------------------------------------------------
+
+def extrair_pareceres_texto(html_str: str) -> str | None:
+    """Extrai o texto dos pareceres de um HTML de relatório de CE (HTML original, não limpo).
+
+    Procura divs com class ``div_parecer`` e extrai o conteúdo dos campos
+    ``relcur_memo``, com a etiqueta do órgão emitente.
+
+    Returns:
+        String com os pareceres formatados, ou None se não houver nenhum.
+    """
+    soup = BeautifulSoup(html_str, "html.parser")
+    textos: list[str] = []
+    for div in soup.find_all("div", class_=re.compile(r"\bdiv_parecer\b")):
+        label_el = div.find("label")
+        label = label_el.get_text(strip=True).rstrip(":") if label_el else ""
+        memo = div.find("div", class_=re.compile(r"\brelcur_memo\b"))
+        if not memo:
+            continue
+        texto = memo.get_text(separator="\n", strip=True)
+        if texto:
+            textos.append(f"{label}:\n{texto}" if label else texto)
+    return "\n\n".join(textos) if textos else None
+
+
+def obter_pareceres_ano_anterior(
+    cur_id: str, ano_atual: str, sessao: SigarraSession
+) -> str | None:
+    """Obtém os pareceres do relatório do ano letivo anterior (ano N-1).
+
+    Args:
+        cur_id:    Identificador do curso.
+        ano_atual: Ano letivo atual como string numérica, ex: ``"2024"``.
+        sessao:    Sessão autenticada no SIGARRA.
+
+    Returns:
+        Texto dos pareceres do ano anterior, ou None se não disponível.
+    """
+    try:
+        ano_int = int(ano_atual)
+    except (ValueError, TypeError):
+        return None
+
+    relatorios = listar_relatorios_ce(cur_id, sessao=sessao)
+    anterior = next((r for r in relatorios if r["ano"] == str(ano_int - 1)), None)
+    if anterior is None:
+        return None
+
+    pv_id = anterior["pv_id"]
+    if pv_id.startswith("3c:"):
+        real_id = pv_id[3:]
+        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}&pv_print_ver=S"
+    else:
+        url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
+
+    try:
+        html_str = sessao.fetch_html(url, timeout=30)
+    except Exception:
+        return None
+
+    return extrair_pareceres_texto(html_str)
+
