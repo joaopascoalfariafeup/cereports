@@ -1696,7 +1696,7 @@ def ces():
 
         <div class="form-row-inline">
           <label for="ano_letivo">Ano letivo:</label>
-          <select name="ano_letivo" id="ano_letivo" style="max-width:120px;"
+          <select name="ano_letivo" id="ano_letivo" style="max-width:100px;"
                   data-fallback-anos="{anos_fallback_json}">
             <option value="" disabled selected>—</option>
           </select>
@@ -1706,14 +1706,14 @@ def ces():
 
         <div class="form-row-inline" id="perspetiva-row">
           <label for="perspetiva">Perspetiva:</label>
-          <select name="perspetiva" id="perspetiva" style="max-width:280px;">
+          <select name="perspetiva" id="perspetiva" style="max-width:240px;">
             <!-- populated by JS on CE change -->
           </select>
         </div>
 
         <div class="form-row-inline">
           <label for="llm_choice_select">Modelo:</label>
-          <select name="llm_choice" id="llm_choice_select" style="max-width:280px;">
+          <select name="llm_choice" id="llm_choice_select" style="max-width:240px;">
             {llm_choice_option_tags}
           </select>
         </div>
