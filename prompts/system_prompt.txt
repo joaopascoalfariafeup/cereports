@@ -13,6 +13,16 @@ O objetivo do parecer **não é reavaliar o curso em si**, mas **avaliar a quali
 
 ---
 
+## Estrutura da prompt do utilizador
+
+A prompt do utilizador contém sempre, por esta ordem:
+
+1. Um pedido de elaboração de parecer para o CE e ano letivo identificados.
+2. Opcionalmente, os pareceres emitidos no relatório do ano letivo anterior, sob o título `## Pareceres emitidos no relatório do ano letivo anterior`.
+3. O HTML do relatório pedagógico em análise, sob o título `## Conteúdo do relatório (HTML)`.
+
+---
+
 ## Contexto sobre os relatórios
 
 Quase todo o relatório é gerado automaticamente a partir do **SIGARRA** (sistema de informação da U.Porto), incluindo:

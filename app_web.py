@@ -2002,12 +2002,28 @@ def preview(job_id: str):
     ce_nome = payload.get("ce_nome", job.ce_nome)
     ano_letivo = payload.get("ano_letivo", job.ano_letivo)
 
+    # URL do relatório no SIGARRA (versão impressão)
+    _pv = job.pv_id or ""
+    if _pv.startswith("3c:"):
+        _relatorio_url = f"https://sigarra.up.pt/feup/pt/relcur_geral.rel3c_edit?pv_id={_pv[3:]}&pv_print_ver=S"
+    elif _pv:
+        _relatorio_url = f"https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id={_pv}&pv_print_ver=S"
+    else:
+        _relatorio_url = ""
+
     csrf = _get_csrf_token()
+
+    _link_relatorio = (
+        f'<a href="{_relatorio_url}" target="_blank" rel="noopener" class="muted">Ver relatório no SIGARRA</a>'
+        if _relatorio_url else ""
+    )
 
     body = f"""
     <div class="card">
       {_ce_titulo_html(ce_nome, ano_letivo)}
-      <div class="muted">Parecer gerado — reveja e utilize conforme necessário.</div>
+      <div class="muted">Parecer gerado — reveja e utilize conforme necessário.
+        {(" &nbsp;·&nbsp; " + _link_relatorio) if _link_relatorio else ""}
+      </div>
     </div>
 
     <form method="post" action="{url_for('download_parecer', job_id=job_id)}" id="form-parecer">
