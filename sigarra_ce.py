@@ -567,6 +567,8 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
         String com os pareceres formatados, ou None se não houver nenhum.
     """
     soup = BeautifulSoup(html_str, "html.parser")
+
+    # Abordagem 1: divs com class "div_parecer" (vista editável/regular)
     textos: list[str] = []
     for div in soup.find_all("div", class_="div_parecer"):
         label_el = div.find("label")
@@ -578,7 +580,30 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
         texto = re.sub(r"\n{3,}", "\n\n", texto).strip()
         if texto:
             textos.append(f"{label}:\n{texto}" if label else texto)
-    return "\n\n".join(textos) if textos else None
+    if textos:
+        return "\n\n".join(textos)
+
+    # Abordagem 2: secção após <h3>Pareceres</h3> (vista de impressão)
+    for heading in soup.find_all(re.compile(r"^h[1-6]$")):
+        if not re.search(r"^pareceres?$", heading.get_text(strip=True), re.I):
+            continue
+        heading_level = int(heading.name[1])
+        parts: list[str] = []
+        for sibling in heading.next_siblings:
+            sname = getattr(sibling, "name", None)
+            if sname and re.match(r"^h[1-6]$", sname) and int(sname[1]) <= heading_level:
+                break
+            if hasattr(sibling, "get_text"):
+                t = sibling.get_text(separator="\n", strip=True)
+                if t:
+                    parts.append(t)
+            elif isinstance(sibling, str) and sibling.strip():
+                parts.append(sibling.strip())
+        texto = re.sub(r"\n{3,}", "\n\n", "\n\n".join(parts)).strip()
+        if texto:
+            return texto
+
+    return None
 
 
 def obter_pareceres_ano_anterior(
@@ -605,11 +630,13 @@ def obter_pareceres_ano_anterior(
         return None
 
     pv_id = anterior["pv_id"]
+    # Usar vista regular (sem pv_print_ver=S) — a estrutura div_parecer/relcur_memo
+    # só existe na vista editável, não na versão de impressão.
     if pv_id.startswith("3c:"):
         real_id = pv_id[3:]
-        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}&pv_print_ver=S"
+        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}"
     else:
-        url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
+        url = f"{SIGARRA_BASE}/relcur_geral.proc_edit?pv_id={pv_id}"
 
     try:
         html_str = sessao.fetch_html(url, timeout=30)
