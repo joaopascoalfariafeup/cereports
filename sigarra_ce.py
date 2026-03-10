@@ -374,7 +374,7 @@ def listar_ces_publicos() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Lista de relatórios disponíveis para um CE (sem autenticação)
+# Lista de relatórios disponíveis para um CE (requer autenticação)
 # ---------------------------------------------------------------------------
 
 SIGARRA_RELCURS_URL = "https://sigarra.up.pt/feup/pt/relcur_geral.show_relcurs?pv_curso_id={}"
@@ -526,6 +526,29 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
         span.string = val if val else "—"
         inp.replace_with(span)
 
+    # 0b. Preservar conteúdo dos pareceres antes de remover <form>.
+    #     O texto do parecer está num <div> ou <textarea> class="relcur_memo"
+    #     dentro de um <form> dentro de div#div_parecer_*. Como form.decompose()
+    #     elimina todos os filhos, extraímos o texto primeiro.
+    for dp in soup.find_all("div", id=re.compile(r"^div_parecer_", re.I)):
+        label_el = dp.find("label")
+        label = label_el.get_text(strip=True) if label_el else ""
+        memo = dp.find(class_="relcur_memo")  # <div> na vista impressão, <textarea> na regular
+        if not memo:
+            continue
+        texto = memo.get_text(separator="\n", strip=True)
+        texto = re.sub(r"\n{3,}", "\n\n", texto).strip()
+        if not texto:
+            continue
+        dp.clear()
+        if label:
+            lbl = soup.new_tag("p")
+            lbl.string = label
+            dp.append(lbl)
+        p = soup.new_tag("p")
+        p.string = texto
+        dp.append(p)
+
     # 1. Remover tags indesejadas (e o seu conteúdo)
     for tag in soup.find_all(_HTML_TAGS_REMOVER):
         tag.decompose()
@@ -574,10 +597,8 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
     for div in soup.find_all("div", id=re.compile(r"^div_parecer_", re.I)):
         label_el = div.find("label")
         label = label_el.get_text(strip=True).rstrip(":") if label_el else ""
-        memo = div.find("div", class_="relcur_memo")
-        if not memo:
-            # fallback: qualquer div com "memo" no class
-            memo = div.find("div", class_=re.compile(r"memo", re.I))
+        # print view: <div class="relcur_memo">; regular view: <textarea class="relcur_memo">
+        memo = div.find(class_="relcur_memo")
         if not memo:
             continue
         texto = memo.get_text(separator="\n", strip=True)
