@@ -6,7 +6,8 @@ __pycache__/
 .eggs/
 dist/
 build/
-docs/
+# docs/ — versionar (exceto ficheiros temporários do Office)
+~$*
 *.egg
 
 
