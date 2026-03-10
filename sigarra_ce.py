@@ -24,6 +24,56 @@ _EMPTY_CARGOS: dict = {
 
 _SIGLA_CACHE: dict[str, str] = {}
 
+# Cache da composição do Conselho Pedagógico da FEUP (página pública)
+_CP_FEUP_URL = f"{SIGARRA_BASE}/web_base.gera_pagina?p_pagina=31720"
+_CP_CACHE: "tuple[float, frozenset[str]] | None" = None
+_CP_CACHE_TTL = 6 * 3600  # 6 horas
+
+
+def _obter_codigos_cp_feup(sess: "SigarraSession | None" = None) -> frozenset[str]:
+    """Obtém os códigos de todos os membros do CP da FEUP (com cache de 6h).
+
+    Faz scraping da página pública de composição do CP e devolve um frozenset
+    com os códigos pessoais (docentes) e números únicos (estudantes) dos membros.
+    """
+    global _CP_CACHE
+    now = time.time()
+    if _CP_CACHE is not None:
+        ts, cached = _CP_CACHE
+        if now - ts < _CP_CACHE_TTL:
+            return cached
+
+    try:
+        if sess is not None:
+            html_str = sess.fetch_html(_CP_FEUP_URL, timeout=15)
+        else:
+            req = _req.Request(_CP_FEUP_URL, headers={"User-Agent": "Mozilla/5.0"})
+            resp = _req.urlopen(req, timeout=15)
+            html_str = resp.read().decode(
+                resp.headers.get_content_charset() or "utf-8", errors="replace"
+            )
+    except Exception:
+        return frozenset()
+
+    soup = BeautifulSoup(html_str, "html.parser")
+    codigos: set[str] = set()
+
+    # Membros docentes: func_geral.formview?p_codigo=NNN (case-insensitive)
+    for a in soup.find_all("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I)):
+        m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
+        if m:
+            codigos.add(m.group(1))
+
+    # Membros estudantes: fest_geral.cursos_list?pv_num_unico=NNN
+    for a in soup.find_all("a", href=re.compile(r"fest_geral\.cursos_list\?pv_num_unico=\d+", re.I)):
+        m = re.search(r"pv_num_unico=(\d+)", a.get("href", ""), re.I)
+        if m:
+            codigos.add(m.group(1))
+
+    result = frozenset(codigos)
+    _CP_CACHE = (now, result)
+    return result
+
 
 def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
     """Obtém a sigla de um curso do SIGARRA (com cache em memória).
@@ -62,10 +112,11 @@ def _is_estudante(codigo: str) -> bool:
 
 
 def _obter_cargos_estudante(sess: SigarraSession, num_unico: str) -> dict:
-    """Obtém cargos de CA de um estudante.
+    """Obtém cargos de um estudante (CP e CA).
 
-    1. Vai a fest_geral.cursos_list?pv_num_unico=NNN para obter cursos "A Frequentar".
-    2. Para cada curso, verifica se o estudante está na CA via
+    1. Verifica se o estudante é membro do CP via página pública da FEUP.
+    2. Vai a fest_geral.cursos_list?pv_num_unico=NNN para obter cursos "A Frequentar".
+    3. Para cada curso, verifica se o estudante está na CA via
        CUR_GERAL.CUR_COMISSAO_acomp_LIST?pv_curso_id=NNN.
     """
     url = f"{SIGARRA_BASE}/fest_geral.cursos_list?pv_num_unico={num_unico}"
@@ -86,6 +137,9 @@ def _obter_cargos_estudante(sess: SigarraSession, num_unico: str) -> dict:
             if " " in part and 6 < len(part) < 100 and not re.search(r"(sigarra|porto|feup)", part, re.I):
                 nome = part
                 break
+
+    # Verificar CP via página pública
+    is_cp = num_unico in _obter_codigos_cp_feup(sess)
 
     cac_cursos: list[dict] = []
     for div in soup.find_all("div", class_="estudante-lista-curso-activo"):
@@ -129,7 +183,7 @@ def _obter_cargos_estudante(sess: SigarraSession, num_unico: str) -> dict:
         except Exception:
             continue
 
-    return {**_EMPTY_CARGOS, "nome": nome, "cac_cursos": cac_cursos}
+    return {**_EMPTY_CARGOS, "nome": nome, "is_cp": is_cp, "cac_cursos": cac_cursos}
 
 
 def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
