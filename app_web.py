@@ -1717,7 +1717,7 @@ def ces():
             {llm_choice_option_tags}
           </select>
         </div>
-        <p class="muted" style="margin:6px 0 0 160px;font-size:0.88em;">Sugestão: use o modelo gratuito para testes e o Claude Opus 4.6 para o parecer final.</p>
+        <p class="muted" style="margin:6px 0 0 160px;font-size:0.88em;">Sugestão: use o modelo gratuito para testes e o claude-opus-4-6 para o parecer final.</p>
 
         <div class="row" style="justify-content:flex-start; margin-top:14px;">
           <button class="btn" type="submit">Gerar parecer</button>
