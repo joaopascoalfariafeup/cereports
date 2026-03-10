@@ -789,6 +789,31 @@ def _page(title: str, body: str, step: int = 0) -> str:
     .edit-counter.over-limit {{ color: var(--err); border-color: var(--err); background: #fef2f2; }}
     ul {{ margin: 8px 0 0 18px; padding: 0; }}
     li {{ margin: 4px 0; }}
+    .edit-toolbar {{
+      display: none;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 6px 8px;
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      border-bottom: none;
+      border-radius: 12px 12px 0 0;
+    }}
+    .edit-toolbar.visible {{ display: flex; }}
+    .edit-toolbar + .preview-html[contenteditable="true"] {{ border-radius: 0 0 12px 12px; }}
+    .edit-toolbar button {{
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 2px 7px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 4px;
+      color: var(--fg);
+      min-width: 28px;
+      font-weight: normal;
+    }}
+    .edit-toolbar button:hover {{ background: #e5e7eb; border-color: var(--line); }}
+    .edit-toolbar .sep {{ width: 1px; background: var(--line); margin: 2px 4px; align-self: stretch; }}
   </style>
 </head>
 <body>
@@ -895,6 +920,7 @@ function setupEditableBlocks() {
     const btnCancel = header.querySelector('.btn-cancel-edit');
     const counter = header.querySelector('.edit-counter');
     const hidden = document.getElementById('field_' + id);
+    const toolbar = document.getElementById('toolbar-' + id);
     const form = hidden ? hidden.closest('form') : null;
     const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
     if (!block || !btnEdit) return;
@@ -923,15 +949,18 @@ function setupEditableBlocks() {
         btnEdit.classList.remove('editing');
         if (btnCancel) { btnCancel.classList.remove('visible'); }
         if (counter) { counter.classList.remove('visible'); }
+        if (toolbar) { toolbar.classList.remove('visible'); }
         if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       } else {
         original = block.innerHTML;
         block.contentEditable = 'true';
+        document.execCommand('defaultParagraphSeparator', false, 'p');
         block.focus();
         btnEdit.textContent = 'Guardar';
         btnEdit.classList.add('editing');
         if (btnCancel) { btnCancel.classList.add('visible'); }
         if (counter) { counter.classList.add('visible'); updateCounter(); }
+        if (toolbar) { toolbar.classList.add('visible'); }
       }
     });
 
@@ -943,6 +972,7 @@ function setupEditableBlocks() {
         btnEdit.classList.remove('editing');
         btnCancel.classList.remove('visible');
         if (counter) { counter.classList.remove('visible'); }
+        if (toolbar) { toolbar.classList.remove('visible'); }
         if (hidden) hidden.value = original;
         if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       });
@@ -960,6 +990,14 @@ function setupEditableBlocks() {
         }
       });
     }
+  });
+
+  // Botões de formatação da toolbar
+  document.querySelectorAll('.edit-toolbar button[data-cmd]').forEach((tbBtn) => {
+    tbBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.execCommand(tbBtn.dataset.cmd, false, null);
+    });
   });
 }
 
@@ -2105,6 +2143,16 @@ def preview(job_id: str):
             <button type="button" class="btn-cancel-edit" id="cancel-parecer">Cancelar</button>
             <button type="button" class="btn-edit" id="edit-parecer">Editar</button>
           </div>
+        </div>
+        <div class="edit-toolbar" id="toolbar-parecer">
+          <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
+          <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
+          <button type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+          <span class="sep"></span>
+          <button type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button>
+          <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button>
+          <span class="sep"></span>
+          <button type="button" data-cmd="removeFormat" title="Limpar formatação">&#10005; Limpar</button>
         </div>
         <div class="preview-html" id="parecer-block" data-field="parecer">{parecer_html}</div>
       </div>
