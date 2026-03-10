@@ -31,7 +31,7 @@ def analisar_ce(
     """Pipeline de análise de um CE: HTML relatório → LLM → preview_payload.
 
     Args:
-        relatorio_html: HTML limpo do relatório pedagógico (obtido via SIGARRA).
+        relatorio_html: HTML limpo do relatório (obtido via SIGARRA).
         ce_nome:        Nome do ciclo de estudos.
         ano_letivo:     Ano letivo (ex: "2024/25").
         provider:       Provider LLM ("anthropic", "openai", "iaedu").
@@ -82,7 +82,7 @@ def analisar_ce(
     }
     perspetiva_label = _PERSPETIVA_LABELS.get((perspetiva or "").upper().strip(), "")
     user_prompt_txt = (
-        f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
+        f"Por favor, elabora um parecer ao relatório do ciclo de estudos "
         f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
     if perspetiva_label:

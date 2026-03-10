@@ -2,7 +2,7 @@
 Módulo de análise de relatórios de Ciclos de Estudos (CEs) por LLM.
 
 Função principal: analisar_relatorio_ce
-  - Recebe PDF bytes do relatório pedagógico de um CE
+  - Recebe PDF bytes do relatório de um CE
   - Envia ao LLM com o system prompt de pareceres
   - Devolve o parecer em HTML
 """
@@ -393,7 +393,7 @@ def analisar_relatorio_ce(
     """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
     Args:
-        relatorio_html: HTML limpo do relatório pedagógico (obtido via SIGARRA).
+        relatorio_html: HTML limpo do relatório (obtido via SIGARRA).
         ce_nome:        Nome do ciclo de estudos (para o prompt).
         ano_letivo:     Ano letivo (ex: "2024/25").
         provider:       Provider LLM: "anthropic", "openai" ou "iaedu".
@@ -417,7 +417,7 @@ def analisar_relatorio_ce(
     perspetiva_label = _PERSPETIVA_LABELS.get((perspetiva or "").upper().strip(), "")
 
     user_text = (
-        f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
+        f"Por favor, elabora um parecer ao relatório do ciclo de estudos "
         f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
     if perspetiva_label:

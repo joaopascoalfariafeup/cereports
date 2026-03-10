@@ -485,6 +485,76 @@ _HTML_TAGS_REMOVER = {
 }
 
 
+def _extrair_highcharts(soup: "BeautifulSoup") -> None:
+    """Extrai dados de gráficos Highcharts e injeta-os como tabela HTML legível.
+
+    Procura scripts que chamam .highcharts({...}), extrai categorias e dados
+    das séries, e substitui o div-alvo vazio por uma tabela com esses valores.
+    Deve ser chamado antes de remover as tags <script>.
+    """
+    for script in soup.find_all("script"):
+        js = script.string or ""
+        if ".highcharts(" not in js:
+            continue
+
+        # Identificar o div-alvo: $("#div_id").highcharts(...)
+        m_sel = re.search(r'\$\s*\(\s*["\']#([^"\']+)["\']\s*\)', js)
+        if not m_sel:
+            continue
+        div_id = m_sel.group(1)
+        target_div = soup.find(id=div_id)
+        if not target_div:
+            continue
+
+        # Extrair categorias e dados da série
+        m_cat = re.search(r'categories\s*:\s*\[([^\]]+)\]', js)
+        m_data = re.search(r'\bdata\s*:\s*\[([^\]]+)\]', js)
+        if not m_cat or not m_data:
+            continue
+        try:
+            cats = [c.strip().strip('"\'') for c in m_cat.group(1).split(",")]
+            vals = [float(v.strip()) for v in m_data.group(1).split(",")]
+        except ValueError:
+            continue
+        if len(cats) != len(vals) or not cats:
+            continue
+
+        # Título do eixo X (label das colunas)
+        m_xtitle = re.search(
+            r'xAxis\b.*?title\s*:\s*\{[^}]*text\s*:\s*["\']([^"\']+)["\']',
+            js, re.DOTALL,
+        )
+        x_label = m_xtitle.group(1) if m_xtitle else ""
+
+        # Unidade / label dos valores (eixo Y)
+        m_ytitle = re.search(
+            r'yAxis\b.*?title\s*:\s*\{[^}]*text\s*:\s*["\']([^"\']+)["\']',
+            js, re.DOTALL,
+        )
+        y_label = m_ytitle.group(1) if m_ytitle else "%"
+
+        # Construir tabela
+        target_div.clear()
+        if x_label:
+            p = soup.new_tag("p")
+            p.string = f"{x_label} ({y_label}):"
+            target_div.append(p)
+
+        table = soup.new_tag("table")
+        tr_h = soup.new_tag("tr")
+        tr_d = soup.new_tag("tr")
+        for cat, val in zip(cats, vals):
+            th = soup.new_tag("th")
+            th.string = str(cat)
+            tr_h.append(th)
+            td = soup.new_tag("td")
+            td.string = f"{val:.1f}%"
+            tr_d.append(td)
+        table.append(tr_h)
+        table.append(tr_d)
+        target_div.append(table)
+
+
 def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
     """Obtém e limpa o HTML do relatório de CE a partir do SIGARRA.
 
@@ -548,6 +618,9 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
         p = soup.new_tag("p")
         p.string = texto
         dp.append(p)
+
+    # 0c. Extrair dados de gráficos Highcharts antes de remover scripts.
+    _extrair_highcharts(soup)
 
     # 1. Remover tags indesejadas (e o seu conteúdo)
     for tag in soup.find_all(_HTML_TAGS_REMOVER):

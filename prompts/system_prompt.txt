@@ -20,7 +20,7 @@ A prompt do utilizador contém sempre, por esta ordem:
 1. Um pedido de elaboração de parecer para o CE e ano letivo identificados.
 2. Opcionalmente, a perspetiva do órgão que emite o parecer: `Perspetiva do parecer: <órgão>`.
 3. Opcionalmente, os pareceres emitidos no relatório do ano letivo anterior, sob o título `## Pareceres emitidos no relatório do ano letivo anterior`.
-4. O HTML do relatório pedagógico em análise, sob o título `## Conteúdo do relatório (HTML)`.
+4. O HTML do relatório em análise, sob o título `## Conteúdo do relatório (HTML)`.
 
 ---
 
