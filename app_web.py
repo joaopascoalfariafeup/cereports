@@ -2014,16 +2014,15 @@ def preview(job_id: str):
     csrf = _get_csrf_token()
 
     _link_relatorio = (
-        f'<a href="{_relatorio_url}" target="_blank" rel="noopener" class="muted">Ver relatório no SIGARRA</a>'
+        f'<a href="{_relatorio_url}" target="_blank" rel="noopener">Ver relatório no SIGARRA (versão impressão)</a>'
         if _relatorio_url else ""
     )
 
     body = f"""
     <div class="card">
       {_ce_titulo_html(ce_nome, ano_letivo)}
-      <div class="muted">Parecer gerado — reveja e utilize conforme necessário.
-        {(" &nbsp;·&nbsp; " + _link_relatorio) if _link_relatorio else ""}
-      </div>
+      <div class="muted">Parecer gerado — reveja e utilize conforme necessário.</div>
+      {(f'<p>{_link_relatorio}</p>') if _link_relatorio else ""}
     </div>
 
     <form method="post" action="{url_for('download_parecer', job_id=job_id)}" id="form-parecer">

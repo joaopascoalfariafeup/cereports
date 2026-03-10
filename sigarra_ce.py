@@ -568,13 +568,14 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
     """
     soup = BeautifulSoup(html_str, "html.parser")
     textos: list[str] = []
-    for div in soup.find_all("div", class_=re.compile(r"\bdiv_parecer\b")):
+    for div in soup.find_all("div", class_="div_parecer"):
         label_el = div.find("label")
         label = label_el.get_text(strip=True).rstrip(":") if label_el else ""
-        memo = div.find("div", class_=re.compile(r"\brelcur_memo\b"))
+        memo = div.find("div", class_="relcur_memo")
         if not memo:
             continue
         texto = memo.get_text(separator="\n", strip=True)
+        texto = re.sub(r"\n{3,}", "\n\n", texto).strip()
         if texto:
             textos.append(f"{label}:\n{texto}" if label else texto)
     return "\n\n".join(textos) if textos else None
