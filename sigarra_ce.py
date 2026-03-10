@@ -568,12 +568,16 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
     """
     soup = BeautifulSoup(html_str, "html.parser")
 
-    # Abordagem 1: divs com class "div_parecer" (vista editável/regular)
+    # Abordagem 1: divs com id="div_parecer_*" (id é inequívoco; class matching
+    # pode falhar com certos parsers HTML)
     textos: list[str] = []
-    for div in soup.find_all("div", class_="div_parecer"):
+    for div in soup.find_all("div", id=re.compile(r"^div_parecer_", re.I)):
         label_el = div.find("label")
         label = label_el.get_text(strip=True).rstrip(":") if label_el else ""
         memo = div.find("div", class_="relcur_memo")
+        if not memo:
+            # fallback: qualquer div com "memo" no class
+            memo = div.find("div", class_=re.compile(r"memo", re.I))
         if not memo:
             continue
         texto = memo.get_text(separator="\n", strip=True)
@@ -583,7 +587,7 @@ def extrair_pareceres_texto(html_str: str) -> str | None:
     if textos:
         return "\n\n".join(textos)
 
-    # Abordagem 2: secção após <h3>Pareceres</h3> (vista de impressão)
+    # Abordagem 2: secção após <h3>Pareceres</h3> (fallback para estruturas alternativas)
     for heading in soup.find_all(re.compile(r"^h[1-6]$")):
         if not re.search(r"^pareceres?$", heading.get_text(strip=True), re.I):
             continue
@@ -630,13 +634,11 @@ def obter_pareceres_ano_anterior(
         return None
 
     pv_id = anterior["pv_id"]
-    # Usar vista regular (sem pv_print_ver=S) — a estrutura div_parecer/relcur_memo
-    # só existe na vista editável, não na versão de impressão.
     if pv_id.startswith("3c:"):
         real_id = pv_id[3:]
-        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}"
+        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={real_id}&pv_print_ver=S"
     else:
-        url = f"{SIGARRA_BASE}/relcur_geral.proc_edit?pv_id={pv_id}"
+        url = SIGARRA_RELCUR_PRINT_URL.format(pv_id)
 
     try:
         html_str = sessao.fetch_html(url, timeout=30)
