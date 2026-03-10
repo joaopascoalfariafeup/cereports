@@ -71,6 +71,22 @@ def analisar_ce(
     # Guardar HTML do parecer
     (run_dir / "parecer.html").write_text(parecer_html, encoding="utf-8")
 
+    # Guardar user_prompt para auditoria (visível no ZIP)
+    user_prompt_txt = (
+        f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
+        f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
+    )
+    if pareceres_anteriores:
+        user_prompt_txt += (
+            f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"
+            f"{pareceres_anteriores}"
+        )
+    user_prompt_txt += (
+        f"\n\n## Conteúdo do relatório (HTML)\n\n"
+        f"[ver relatorio_ce.html — {len(relatorio_html) // 1024} KB]"
+    )
+    (run_dir / "user_prompt.txt").write_text(user_prompt_txt, encoding="utf-8")
+
     # Copiar system_prompt para auditoria (visível no ZIP)
     for sp in [_PROMPTS_DIR / "system_prompt.txt", _SCRIPT_DIR / "system_prompt.txt"]:
         if sp.exists():
