@@ -388,6 +388,7 @@ def analisar_relatorio_ce(
     modelo: str,
     logger: AuditoriaLogger | None = None,
     pareceres_anteriores: str | None = None,
+    perspetiva: str = "",
 ) -> str:
     """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
@@ -407,10 +408,20 @@ def analisar_relatorio_ce(
     system = _carregar_system_prompt()
     relatorio_html = _preprocess_relatorio_html(relatorio_html)
 
+    _PERSPETIVA_LABELS = {
+        "CC": "Conselho Científico (CC)",
+        "CP": "Conselho Pedagógico (CP)",
+        "CA": "Comissão de Acompanhamento (CA)",
+        "DCE": "Diretor do Ciclo de Estudos — Auto-avaliação (DCE)",
+    }
+    perspetiva_label = _PERSPETIVA_LABELS.get((perspetiva or "").upper().strip(), "")
+
     user_text = (
         f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
         f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
+    if perspetiva_label:
+        user_text += f"\n\nPerspetiva do parecer: {perspetiva_label}"
     if pareceres_anteriores:
         user_text += (
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"

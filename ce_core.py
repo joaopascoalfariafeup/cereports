@@ -26,6 +26,7 @@ def analisar_ce(
     run_dir: Path,
     logger: AuditoriaLogger,
     pareceres_anteriores: str | None = None,
+    perspetiva: str = "",
 ) -> dict:
     """Pipeline de análise de um CE: HTML relatório → LLM → preview_payload.
 
@@ -60,6 +61,7 @@ def analisar_ce(
             modelo=modelo,
             logger=logger,
             pareceres_anteriores=pareceres_anteriores,
+            perspetiva=perspetiva,
         )
         custo_post = logger.total_custo_estimado() or 0.0
         custo_str = f" [~${custo_post - custo_pre:.4f}]" if custo_post > custo_pre else ""
@@ -72,10 +74,19 @@ def analisar_ce(
     (run_dir / "parecer.html").write_text(parecer_html, encoding="utf-8")
 
     # Guardar user_prompt para auditoria (visível no ZIP)
+    _PERSPETIVA_LABELS = {
+        "CC": "Conselho Científico (CC)",
+        "CP": "Conselho Pedagógico (CP)",
+        "CA": "Comissão de Acompanhamento (CA)",
+        "DCE": "Diretor do Ciclo de Estudos — Auto-avaliação (DCE)",
+    }
+    perspetiva_label = _PERSPETIVA_LABELS.get((perspetiva or "").upper().strip(), "")
     user_prompt_txt = (
         f"Por favor, elabora um parecer ao relatório pedagógico do ciclo de estudos "
         f'"{ce_nome}", ano letivo {ano_letivo}, com base no relatório fornecido.'
     )
+    if perspetiva_label:
+        user_prompt_txt += f"\n\nPerspetiva do parecer: {perspetiva_label}"
     if pareceres_anteriores:
         user_prompt_txt += (
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"

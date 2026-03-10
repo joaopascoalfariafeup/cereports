@@ -222,6 +222,7 @@ class Tarefa:
     ano_letivo: str = ""
     pv_id: str = ""
     cur_id: str = ""
+    perspetiva: str = ""
     user_code: str = ""
     llm_provider: str = ""
     llm_modelo: str = ""
@@ -337,6 +338,28 @@ def _ce_titulo_html(ce_nome: str, ano: str = "") -> str:
         f'{ano_html}'
         f'</p>'
     )
+
+
+def _perspetivas_disponiveis(
+    ce: dict,
+    is_cc: bool,
+    is_cp: bool,
+    ca_set: set,
+    director_set: set,
+) -> list[dict]:
+    """Devolve lista de {value, label} de perspetivas disponíveis para um CE."""
+    tipo = ce.get("tipo", "")
+    cur_id = ce.get("cur_id", "")
+    persp: list[dict] = []
+    if is_cc:
+        persp.append({"value": "CC", "label": "Conselho Científico"})
+    if is_cp and tipo in ("L", "M"):
+        persp.append({"value": "CP", "label": "Conselho Pedagógico"})
+    if cur_id in ca_set and tipo == "D":
+        persp.append({"value": "CA", "label": "Comissão de Acompanhamento"})
+    if cur_id in director_set:
+        persp.append({"value": "DCE", "label": "Diretor (auto-avaliação)"})
+    return persp
 
 
 # ---------------------------------------------------------------------------
@@ -991,12 +1014,37 @@ function setupCeYearLoader() {
       .catch(function() { populateAnos(getFallbackAnos()); });
   }
 
+  function updatePerspetivas() {
+    const perspSelect = _byId('perspetiva');
+    const perspRow = _byId('perspetiva-row');
+    if (!perspSelect) return;
+    const opt = ceSelect.options[ceSelect.selectedIndex];
+    var persp = [];
+    try { persp = JSON.parse((opt && opt.dataset.perspetivas) || '[]'); } catch(e) {}
+    const prev = perspSelect.value;
+    perspSelect.innerHTML = '';
+    if (persp.length === 0) {
+      if (perspRow) perspRow.style.display = 'none';
+      return;
+    }
+    if (perspRow) perspRow.style.display = '';
+    persp.forEach(function(p) {
+      const o = document.createElement('option');
+      o.value = p.value;
+      o.textContent = p.label;
+      if (p.value === prev) o.selected = true;
+      perspSelect.appendChild(o);
+    });
+    if (!perspSelect.value && persp.length > 0) perspSelect.value = persp[0].value;
+  }
+
   const curIdHidden = _byId('cur_id_hidden');
   function onCeChange() {
     const opt = ceSelect.options[ceSelect.selectedIndex];
     const curId = opt ? (opt.dataset.curId || '') : '';
     if (curIdHidden) curIdHidden.value = curId;
     loadYears(curId);
+    updatePerspetivas();
   }
 
   ceSelect.addEventListener('change', onCeChange);
@@ -1550,8 +1598,16 @@ def ces():
                 permitido, motivo = _ce_permitido(ce)
                 disabled_attr = "" if permitido else f' disabled title="{_esc(motivo)}"'
                 sel = " selected" if ce["nome"] == last_ce_nome and permitido else ""
+                if _has_cargos:
+                    persp_list = _perspetivas_disponiveis(
+                        ce, cargos["is_cc"], cargos["is_cp"], _ca_ids, _director_ids
+                    )
+                else:
+                    persp_list = []
+                persp_json = _esc(json.dumps(persp_list, ensure_ascii=False))
                 optgroups += (
-                    f'<option value="{_esc(ce["nome"])}" data-cur-id="{_esc(ce["cur_id"])}"{sel}{disabled_attr}>'
+                    f'<option value="{_esc(ce["nome"])}" data-cur-id="{_esc(ce["cur_id"])}"'
+                    f' data-perspetivas="{persp_json}"{sel}{disabled_attr}>'
                     f'{_esc(ce["nome"])}</option>'
                 )
             optgroups += "</optgroup>"
@@ -1609,6 +1665,13 @@ def ces():
         </div>
 
         <input type="hidden" name="pv_id" id="pv_id" value="">
+
+        <div class="form-row-inline" id="perspetiva-row">
+          <label for="perspetiva">Perspetiva:</label>
+          <select name="perspetiva" id="perspetiva" style="max-width:320px;">
+            <!-- populated by JS on CE change -->
+          </select>
+        </div>
 
         <div class="form-row-inline">
           <label for="llm_choice_select">Modelo:</label>
@@ -1678,6 +1741,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 run_dir=job.run_dir,
                 logger=log,
                 pareceres_anteriores=pareceres_anteriores,
+                perspetiva=job.perspetiva,
             )
         job.ok = True
     except Exception as e:
@@ -1721,6 +1785,9 @@ def start_job():
     ano_letivo = request.form.get("ano_letivo", "").strip()
     pv_id = request.form.get("pv_id", "").strip()
     llm_choice = request.form.get("llm_choice", "").strip()
+    perspetiva = request.form.get("perspetiva", "").strip().upper()
+    if perspetiva not in ("CC", "CP", "CA", "DCE"):
+        perspetiva = ""
 
     if not ce_nome:
         return redirect(url_for("ces"))
@@ -1815,6 +1882,7 @@ def start_job():
         ano_letivo=_format_ano_letivo_display(ano_letivo),
         pv_id=pv_id,
         cur_id=cur_id,
+        perspetiva=perspetiva,
         user_code=user_code,
         llm_provider=llm_provider,
         llm_modelo=llm_modelo,
@@ -2014,7 +2082,7 @@ def preview(job_id: str):
     csrf = _get_csrf_token()
 
     _link_relatorio = (
-        f'<a href="{_relatorio_url}" target="_blank" rel="noopener">Ver relatório no SIGARRA (versão impressão)</a>'
+        f'<a href="{_relatorio_url}" target="_blank" rel="noopener">Ver relatório no SIGARRA</a>'
         if _relatorio_url else ""
     )
 
