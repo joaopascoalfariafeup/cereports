@@ -196,7 +196,7 @@ Não repetir dados do relatório extensivamente — referir apenas o necessário
 
 Seguem-se exemplos de pareceres emitidos para relatórios de anos anteriores do mesmo CE ou de CEs semelhantes, para calibrar tom e nível de detalhe.
 
-### Exemplo 1 — Parecer do Conselho Pedagógico (MESW 2023/24)
+### Exemplo 1 — Parecer do Conselho Científico (MESW 2023/24)
 
 <example_parecer>
 <h3>Parecer</h3>
@@ -217,7 +217,7 @@ Seguem-se exemplos de pareceres emitidos para relatórios de anos anteriores do 
 <p>As propostas de melhoria apresentadas no relatório demonstram um diagnóstico claro do rumo e uma orientação estratégica para a sua resolução. Quanto a propostas de melhoria é sugerido reforçar a internacionalização, fortalecer a ligação à indústria e fortalecer a oferta através do aumento do número de vagas e da melhoria do plano de estudos. Outras propostas estão em continuidade com o que foi proposto no ano anterior (taxa de abandono e parcerias com a indústria), sendo já reportadas algumas ações para a sua resolução.</p>
 </example_parecer>
 
-### Exemplo 2 — Parecer do Conselho Científico (MESW 2023/24)
+### Exemplo 2 — Parecer do Conselho Pedagógico (MESW 2023/24)
 
 <example_parecer>
 <h3>Parecer</h3>
