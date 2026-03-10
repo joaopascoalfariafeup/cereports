@@ -1,7 +1,7 @@
 # Memória do projecto CEReports
 
 ## Projecto
-Ferramenta web Flask que gera pareceres sobre relatórios pedagógicos de Ciclos de Estudos (CEs/cursos) da FEUP.
+Ferramenta web Flask que gera pareceres sobre relatórios de Ciclos de Estudos (CEs/cursos) da FEUP.
 Repositório GitHub: joaopascoalfariafeup/cereports
 VM: coursemonitoring@coursemonitoring.fe.up.pt (deploy automático via deployer.sh)
 URL público: https://ce.uc-reports.com (cloudflared tunnel, porta 5001)
