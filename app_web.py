@@ -1133,7 +1133,7 @@ def login():
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <div class="row" style="align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Utilizador:</label>
-          <input name="login" autocomplete="username" placeholder="ex: jpf@fe.up.pt" required style="width:220px;">
+          <input name="login" autocomplete="username" placeholder="ex: jpf@fe.up.pt ou up20...@edu.fe.up.pt" required style="width:280px;">
         </div>
         <div class="row" style="margin-top:10px; align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Senha:</label>
