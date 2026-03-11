@@ -210,15 +210,19 @@ class SigarraSession:
         """Cria uma SigarraSession com os cookies desta sessão mas para um utilizador diferente.
 
         Usado quando o servidor tem a sua própria sessão SIGARRA e o utilizador
-        autenticou por outro mecanismo (ex: Microsoft OAuth).
-        Os cookies são copiados (deep copy) para que a sessão do utilizador
-        seja independente da sessão do servidor.
+        autenticou por outro mecanismo (ex: Microsoft OAuth, email OTP).
+        Os cookies são copiados cookie a cookie (deepcopy falha em RLock interno do jar).
         """
+        import http.cookiejar
         import copy
+        novo_jar = http.cookiejar.CookieJar()
+        with self._lock:
+            for c in self._cookie_jar:
+                novo_jar.set_cookie(copy.copy(c))
         nova = SigarraSession.__new__(SigarraSession)
-        nova._cookie_jar = copy.deepcopy(self._cookie_jar)
+        nova._cookie_jar = novo_jar
         nova._opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(nova._cookie_jar)
+            urllib.request.HTTPCookieProcessor(novo_jar)
         )
         nova._lock = threading.Lock()
         nova._autenticado = True
