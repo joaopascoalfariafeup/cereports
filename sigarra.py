@@ -206,6 +206,27 @@ class SigarraSession:
 
         return dados
 
+    def clone_para_utilizador(self, codigo: str) -> "SigarraSession":
+        """Cria uma SigarraSession com os cookies desta sessão mas para um utilizador diferente.
+
+        Usado quando o servidor tem a sua própria sessão SIGARRA e o utilizador
+        autenticou por outro mecanismo (ex: Microsoft OAuth).
+        Os cookies são copiados (deep copy) para que a sessão do utilizador
+        seja independente da sessão do servidor.
+        """
+        import copy
+        nova = SigarraSession.__new__(SigarraSession)
+        nova._cookie_jar = copy.deepcopy(self._cookie_jar)
+        nova._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(nova._cookie_jar)
+        )
+        nova._lock = threading.Lock()
+        nova._autenticado = True
+        nova._codigo_pessoal = codigo
+        nova._http_retries = self._http_retries
+        nova._http_backoff_base = self._http_backoff_base
+        return nova
+
     @staticmethod
     def _saml_input_val(html: str, name: str) -> str:
         """Extrai value de um campo de formulário pelo name."""
