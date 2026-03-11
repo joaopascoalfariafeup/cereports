@@ -1774,15 +1774,16 @@ def login_email_verificar():
 
     try:
         server_sess = _get_server_session()
+        user_sess = server_sess.clone_para_utilizador(codigo)
     except Exception as e:
-        app.logger.warning("login_email_verificar: sessão servidor indisponível: %s", e)
+        app.logger.warning("login_email_verificar: erro ao criar sessão para %s: %s", email, e)
         return _page("Acesso por email", f"""
         <div class="card">
-          <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde ou use o login SIGARRA.</p>
+          <p><b>Erro ao criar sessão:</b></p>
+          <p><code style="font-size:0.85em;word-break:break-all;">{_esc(str(e))}</code></p>
           <p><a href="{url_for('login')}">Login SIGARRA</a></p>
         </div>""")
 
-    user_sess = server_sess.clone_para_utilizador(codigo)
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = email
     return redirect(url_for("ces"))
