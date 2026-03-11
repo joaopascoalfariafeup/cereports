@@ -1257,7 +1257,7 @@ def privacidade():
           As credenciais não são guardadas em disco nem registadas em logs.
         </li>
         <li>
-          <b>Acesso por email institucional (upNNNNNN@up.pt):</b> o utilizador recebe um código
+          <b>Acesso por email institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt):</b> o utilizador recebe um código
           temporário de uso único por email (válido 10 minutos), enviado através do serviço
           <a href="https://resend.com" target="_blank" rel="noopener">Resend</a>.
           O endereço de email não é guardado em disco após a verificação do código.
@@ -1640,8 +1640,8 @@ def _resend_from() -> str:
 
 
 def _codigo_de_email_otp(email: str) -> Optional[str]:
-    """Extrai código SIGARRA de email upNNNNNN@up.pt (só este padrão)."""
-    m = re.match(r"^up(\d{6,9})@up\.pt$", email.strip().lower())
+    """Extrai código SIGARRA de emails UP: upNNNNNN@up.pt ou upNNNNNN@*.up.pt."""
+    m = re.match(r"^up(\d{6,9})@(?:[\w-]+\.)*up\.pt$", email.strip().lower())
     return m.group(1) if m else None
 
 
@@ -1692,7 +1692,7 @@ def login_email():
     csrf = _get_csrf_token()
     return _page("Acesso por email institucional", f"""
     <div class="card">
-      <p>Introduza o seu email UP no formato upNNNNNN@up.pt.</p>
+      <p>Introduza o seu email UP (ex: upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
       <form method="post" action="{url_for('login_email_post')}">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <div class="row" style="align-items:center; gap:10px; max-width:400px;">
@@ -1719,7 +1719,7 @@ def login_email_post():
     if not codigo:
         return _page("Acesso por email", f"""
         <div class="card">
-          <p><b>Email não reconhecido.</b> Use o formato <b>upNNNNNN@up.pt</b>.</p>
+          <p><b>Email não reconhecido.</b> Use um email UP no formato upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt.</p>
           <p><a href="{url_for('login_email')}">Tentar novamente</a></p>
         </div>""")
 
