@@ -833,6 +833,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
     <div class="app-subtitle">FEUP · Melhoria Contínua</div>
   </header>
   {stepper}
+  {f'<h1 class="page-title">{_esc(title)}</h1>' if not step else ''}
   {body}
 </div>
 <script src="{url_for('static_app_js')}"></script>
@@ -1133,7 +1134,7 @@ def login():
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <div class="row" style="align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Utilizador:</label>
-          <input name="login" autocomplete="username" placeholder="ex: sigla@fe.up.pt ou up2025XXXXX@edu.fe.up.pt" required style="width:280px;">
+          <input name="login" autocomplete="username" placeholder="email institucional SIGARRA" required style="width:260px;">
         </div>
         <div class="row" style="margin-top:10px; align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Senha:</label>
