@@ -1202,7 +1202,7 @@ def login():
         </div>
         <p class="muted"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       </form>
-      {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;font-size:0.9em;color:#555;">Alternativa — acesso por email <b>upNNNNNN@up.pt</b>:</p><p style="margin:0"><a href="' + url_for("login_email") + '" style="display:inline-block;padding:7px 14px;border:1px solid #888;border-radius:4px;text-decoration:none;font-size:0.9em;">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
+      {'<p style="margin:18px 0 0;font-size:0.9em;">Alternativa: <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
       {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;"><a href="' + url_for("login_microsoft") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Login com conta Microsoft UP</a></p>' if _ms_config()["client_id"] else ''}
     </div>
     """
@@ -1677,11 +1677,9 @@ def login_email():
     if not _resend_api_key():
         abort(404)
     csrf = _get_csrf_token()
-    return _page("Acesso por email", f"""
+    return _page("Acesso por email institucional", f"""
     <div class="card">
-      <h2 style="margin-top:0">Acesso por email institucional</h2>
-      <p>Introduza o seu email UP no formato <b>upNNNNNN@up.pt</b>.<br>
-         Receberá um código de acesso válido por 10 minutos.</p>
+      <p>Introduza o seu email UP no formato upNNNNNN@up.pt.</p>
       <form method="post" action="{url_for('login_email_post')}">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <div class="row" style="align-items:center; gap:10px; max-width:400px;">
@@ -1729,19 +1727,18 @@ def login_email_post():
         </div>""")
 
     csrf = _get_csrf_token()
-    return _page("Acesso por email", f"""
+    return _page("Acesso por email institucional", f"""
     <div class="card">
-      <h2 style="margin-top:0">Introduza o código recebido</h2>
-      <p>Enviámos um código de 6 dígitos para <b>{_esc(email)}</b>.<br>
+      <p>Enviámos um código de 6 dígitos para {_esc(email)}.<br>
          Válido por 10 minutos.</p>
       <form method="post" action="{url_for('login_email_verificar')}">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <input type="hidden" name="email" value="{_esc(email)}">
-        <div class="row" style="align-items:center; gap:10px; max-width:300px;">
-          <label style="width:60px; min-width:60px;">Código:</label>
+        <div class="row" style="align-items:center; gap:10px; max-width:360px;">
+          <label style="white-space:nowrap;">Introduza o código recebido:</label>
           <input name="otp" type="text" inputmode="numeric" pattern="[0-9]{{6}}"
                  maxlength="6" autocomplete="one-time-code"
-                 placeholder="000000" required style="width:120px; font-size:1.3em; letter-spacing:0.15em;">
+                 placeholder="000000" required style="width:100px; font-size:1.3em; letter-spacing:0.15em;">
         </div>
         <div class="row" style="margin-top:14px;">
           <button type="submit">Verificar</button>
