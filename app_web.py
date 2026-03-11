@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -37,6 +38,11 @@ from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatori
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
 load_env()
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -1472,6 +1478,8 @@ def api_relatorios_ce(cur_id: str):
         label = f"{y}/{(y + 1) % 100:02d}"
         anos.append({"value": ano, "label": label, "pv_id": r["pv_id"]})
 
+    if not anos:
+        app.logger.warning("api_relatorios_ce cur_id=%s user=%s: lista vazia", cur_id, sess.codigo_pessoal)
     return Response(json.dumps({"anos": anos}), mimetype="application/json")
 
 

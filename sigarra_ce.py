@@ -6,10 +6,13 @@ Funções específicas para listar CEs e obter relatórios pedagógicos.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 import urllib.request as _req
 from bs4 import BeautifulSoup
+
+_log = logging.getLogger(__name__)
 
 from sigarra import SigarraSession, SIGARRA_BASE
 
@@ -422,7 +425,8 @@ def listar_relatorios_ce(
             resp = _req.urlopen(req, timeout=15)
             charset = resp.headers.get_content_charset() or "utf-8"
             html_str = resp.read().decode(charset, errors="replace")
-    except Exception:
+    except Exception as _e:
+        _log.warning("listar_relatorios_ce(%s): erro ao obter HTML: %s", cur_id, _e)
         return []
 
     soup = BeautifulSoup(html_str, "html.parser")
