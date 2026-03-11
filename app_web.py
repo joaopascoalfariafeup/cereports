@@ -1246,13 +1246,26 @@ def privacidade():
         imprecisões e devem ser sempre revistos antes da sua utilização.
       </p>
 
-      <h4>Credenciais e comunicação segura</h4>
+      <h4>Autenticação e comunicação segura</h4>
       <p>
-        A autenticação é efetuada através das credenciais SIGARRA do utilizador, transmitidas pelo servidor
-        desta aplicação para estabelecer uma sessão segura no SIGARRA.
-        As credenciais não são guardadas em disco nem registadas em logs.
-        Toda a comunicação é protegida por HTTPS/TLS.
+        A aplicação suporta dois métodos de autenticação, ambos protegidos por HTTPS/TLS:
       </p>
+      <ul>
+        <li>
+          <b>Login SIGARRA (utilizador e senha):</b> as credenciais são transmitidas pelo servidor
+          desta aplicação para a API do SIGARRA para estabelecer uma sessão autenticada.
+          As credenciais não são guardadas em disco nem registadas em logs.
+        </li>
+        <li>
+          <b>Acesso por email institucional (upNNNNNN@up.pt):</b> o utilizador recebe um código
+          temporário de uso único por email (válido 10 minutos), enviado através do serviço
+          <a href="https://resend.com" target="_blank" rel="noopener">Resend</a>.
+          O endereço de email não é guardado em disco após a verificação do código.
+          A sessão SIGARRA é estabelecida através de uma conta de servidor com acesso alargado
+          à consulta de relatórios de ciclos de estudos, sendo o código do utilizador registado
+          nos metadados de auditoria.
+        </li>
+      </ul>
 
       <h4>Dados acedidos pela aplicação</h4>
       <p>
