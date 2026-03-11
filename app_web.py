@@ -656,6 +656,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
     a {{ color: #1d4ed8; text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
     code {{ background: #f3f4f6; border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; }}
+    .pill {{ display:inline-block; padding: 3px 10px; border-radius: 999px; background:#f3f4f6; border:1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 500; }}
     .status-ok {{ color: #15803d; }}
     .status-err {{ color: #b91c1c; }}
     .status-run {{ color: #1d4ed8; }}
@@ -827,6 +828,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
   <header class="app-header">
     <div class="app-brandrow">
       <span class="app-brand">Assistente de Apoio à Elaboração de Pareceres sobre Relatórios de Ciclos de Estudos</span>
+      <span class="pill">Piloto</span>
     </div>
     <div class="app-subtitle">FEUP · Melhoria Contínua</div>
   </header>
@@ -1131,10 +1133,7 @@ def login():
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
         <div class="row" style="align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Utilizador:</label>
-          <div class="input-with-suffix" style="width:220px;">
-            <input name="login" autocomplete="username" required>
-            <span class="input-suffix">@fe.up.pt</span>
-          </div>
+          <input name="login" autocomplete="username" placeholder="ex: jpf@fe.up.pt" required style="width:220px;">
         </div>
         <div class="row" style="margin-top:10px; align-items:center; gap:10px; max-width:400px;">
           <label style="width:78px; min-width:78px;">Senha:</label>
@@ -1565,7 +1564,8 @@ def ces():
         return False, "Sem cargo que permita emitir parecer para este CE"
 
     nome_docente = cargos.get("nome", "") or eff_code
-    docente_label = f'Docente: {_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else ""
+    _papel = "Estudante" if re.match(r"^20\d{7,}$", eff_code) else "Docente"
+    docente_label = f'{_papel}: {_esc(nome_docente)} ({_esc(eff_code)})' if eff_code else ""
 
     cargos_items = []
     if cargos["is_cp"]:
