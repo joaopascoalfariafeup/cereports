@@ -1149,9 +1149,6 @@ def login():
         <div class="row" style="margin-top:14px;">
           <button id="btn-login" type="submit">Autenticar</button>
         </div>
-        <p class="muted" style="margin-top:12px;">
-          Ou <a href="{url_for('login_federado')}">Autenticação federada</a>
-        </p>
         <p class="muted"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       </form>
     </div>
@@ -1198,27 +1195,10 @@ def privacidade():
 
       <h4>Credenciais e comunicação segura</h4>
       <p>
-        A aplicação disponibiliza dois mecanismos de autenticação:
-      </p>
-      <ul>
-        <li>
-          <b>Autenticação direta (SIGARRA):</b> as credenciais introduzidas são usadas apenas para estabelecer
-          uma sessão segura no SIGARRA.
-          As credenciais não são guardadas em disco nem registadas em logs.
-        </li>
-        <li>
-          <b>Autenticação federada (Shibboleth/SAML2):</b> o fluxo de autenticação é iniciado via
-          Shibboleth/SAML2 com o Fornecedor de Identidade da Universidade do Porto (wayf.up.pt).
-          Por razões técnicas (necessidade de sessão HTTP do lado do servidor para acesso à API SIGARRA),
-          as credenciais introduzidas no formulário do IdP transitam pelo servidor desta aplicação antes
-          de serem reencaminhadas para o IdP — tal como num proxy HTTPS. As credenciais são transmitidas
-          exclusivamente sobre HTTPS, não são guardadas em disco e não são registadas em logs.
-          Apenas a asserção SAML resultante é utilizada para estabelecer a sessão.
-        </li>
-      </ul>
-      <p>
-        Toda a comunicação entre o utilizador e a aplicação é protegida através de ligações cifradas (HTTPS/TLS),
-        assegurando a confidencialidade e integridade dos dados em trânsito.
+        A autenticação é efetuada através das credenciais SIGARRA do utilizador, transmitidas pelo servidor
+        desta aplicação para estabelecer uma sessão segura no SIGARRA.
+        As credenciais não são guardadas em disco nem registadas em logs.
+        Toda a comunicação é protegida por HTTPS/TLS.
       </p>
 
       <h4>Dados acedidos pela aplicação</h4>
