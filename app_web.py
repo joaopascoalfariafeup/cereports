@@ -1738,7 +1738,7 @@ def login_email_post():
           <label style="white-space:nowrap;">Introduza o código recebido:</label>
           <input name="otp" type="text" inputmode="numeric" pattern="[0-9]{{6}}"
                  maxlength="6" autocomplete="one-time-code"
-                 placeholder="000000" required style="width:100px; font-size:1.3em; letter-spacing:0.15em;">
+                 placeholder="000000" required style="width:120px; font-size:1.3em; letter-spacing:0.15em;">
         </div>
         <div class="row" style="margin-top:14px;">
           <button type="submit">Verificar</button>
