@@ -1150,7 +1150,7 @@ def login():
       </form>
     </div>
     """
-    return _page("Login", body)
+    return _page("Login no SIGARRA", body)
 
 
 @app.post("/login")
@@ -1164,7 +1164,7 @@ def login_post():
     try:
         sess.autenticar(login=login_val, password=password)
     except Exception as e:
-        return _page("Login", f"""
+        return _page("Login no SIGARRA", f"""
         <div class="card">
           <p><b>Falha na autenticação:</b> {_esc(e)}</p>
           <p><a href="{url_for('login')}">Voltar</a></p>
