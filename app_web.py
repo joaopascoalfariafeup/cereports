@@ -1158,6 +1158,9 @@ def login():
 def login_post():
     _require_csrf()
     login_val = request.form.get("login", "").strip()
+    # A API mob do SIGARRA aceita apenas o prefixo (ex: "jpf" ou "up202206705")
+    if "@" in login_val:
+        login_val = login_val.split("@")[0]
     password = request.form.get("password", "")
 
     sess = SigarraSession()
