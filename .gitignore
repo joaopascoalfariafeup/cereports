@@ -35,3 +35,6 @@ Thumbs.db
 
 # Deploy state
 .draining
+
+# Rascunhos bridge (não versionar — contêm chaves de serviço nos .env)
+bridge/
