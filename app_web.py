@@ -1658,6 +1658,7 @@ def _send_otp_email(to_email: str, otp: str) -> None:
         headers={
             "Authorization": f"Bearer {_resend_api_key()}",
             "Content-Type":  "application/json",
+            "User-Agent":    "CEReports/1.0",
         },
         method="POST",
     )
