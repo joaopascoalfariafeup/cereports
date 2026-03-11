@@ -1661,9 +1661,14 @@ def _send_otp_email(to_email: str, otp: str) -> None:
         },
         method="POST",
     )
-    with _urllib_req.urlopen(req, timeout=15) as resp:
-        if resp.status not in (200, 201):
-            raise RuntimeError(f"Resend devolveu HTTP {resp.status}")
+    try:
+        with _urllib_req.urlopen(req, timeout=15) as resp:
+            if resp.status not in (200, 201):
+                body = resp.read().decode("utf-8", errors="replace")[:300]
+                raise RuntimeError(f"Resend HTTP {resp.status}: {body}")
+    except _urllib_req.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"Resend HTTP {e.code}: {body}") from e
 
 
 @app.get("/login/email")
@@ -1717,8 +1722,9 @@ def login_email_post():
         app.logger.warning("login_email_post: erro ao enviar OTP para %s: %s", email, e)
         return _page("Acesso por email", f"""
         <div class="card">
-          <p><b>Erro ao enviar email.</b> Tente mais tarde ou use o login SIGARRA.</p>
-          <p><a href="{url_for('login')}">Login SIGARRA</a></p>
+          <p><b>Erro ao enviar email:</b></p>
+          <p><code style="font-size:0.85em;word-break:break-all;">{_esc(str(e))}</code></p>
+          <p><a href="{url_for('login_email')}">Tentar novamente</a> &nbsp;|&nbsp; <a href="{url_for('login')}">Login SIGARRA</a></p>
         </div>""")
 
     csrf = _get_csrf_token()
