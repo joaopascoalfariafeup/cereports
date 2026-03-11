@@ -88,6 +88,10 @@ _SERVER_SESS_LOCK = threading.Lock()
 _MS_STATES: dict[str, float] = {}
 _MS_STATES_LOCK = threading.Lock()
 
+# OTPs de email em curso: email → {otp, codigo, expires}
+_OTPS: dict[str, dict] = {}
+_OTPS_LOCK = threading.Lock()
+
 # Configuração Microsoft OAuth (lida após load_env())
 def _ms_config() -> dict:
     return {
@@ -1198,6 +1202,7 @@ def login():
         </div>
         <p class="muted"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       </form>
+      {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;font-size:0.9em;color:#555;">Alternativa — acesso por email <b>upNNNNNN@up.pt</b>:</p><p style="margin:0"><a href="' + url_for("login_email") + '" style="display:inline-block;padding:7px 14px;border:1px solid #888;border-radius:4px;text-decoration:none;font-size:0.9em;">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
       {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;"><a href="' + url_for("login_microsoft") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Login com conta Microsoft UP</a></p>' if _ms_config()["client_id"] else ''}
     </div>
     """
@@ -1601,6 +1606,173 @@ def login_microsoft_callback():
         <div class="card">
           <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde.</p>
           <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
+        </div>""")
+
+    user_sess = server_sess.clone_para_utilizador(codigo)
+    _set_sigarra_session(user_sess)
+    flask_session["sigarra_login"] = email
+    return redirect(url_for("ces"))
+
+
+# ---------------------------------------------------------------------------
+# Autenticação por email OTP (via Resend; ativo se RESEND_API_KEY configurado)
+# ---------------------------------------------------------------------------
+
+def _resend_api_key() -> str:
+    return (os.environ.get("RESEND_API_KEY") or "").strip()
+
+
+def _resend_from() -> str:
+    return (os.environ.get("RESEND_FROM") or "noreply@ce.uc-reports.com").strip()
+
+
+def _codigo_de_email_otp(email: str) -> Optional[str]:
+    """Extrai código SIGARRA de email upNNNNNN@up.pt (só este padrão)."""
+    m = re.match(r"^up(\d{6,9})@up\.pt$", email.strip().lower())
+    return m.group(1) if m else None
+
+
+def _purge_expired_otps() -> None:
+    now = time.time()
+    with _OTPS_LOCK:
+        expired = [k for k, v in _OTPS.items() if v["expires"] < now]
+        for k in expired:
+            del _OTPS[k]
+
+
+def _send_otp_email(to_email: str, otp: str) -> None:
+    """Envia OTP via Resend API."""
+    payload = json.dumps({
+        "from":    _resend_from(),
+        "to":      [to_email],
+        "subject": "Código de acesso — Pareceres CE FEUP",
+        "html":    (
+            f"<p>O seu código de acesso temporário é:</p>"
+            f"<p style='font-size:2em;letter-spacing:0.2em;font-weight:bold'>{otp}</p>"
+            f"<p>Válido por 10 minutos. Não partilhe este código.</p>"
+        ),
+    }).encode()
+    req = _urllib_req.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {_resend_api_key()}",
+            "Content-Type":  "application/json",
+        },
+        method="POST",
+    )
+    with _urllib_req.urlopen(req, timeout=15) as resp:
+        if resp.status not in (200, 201):
+            raise RuntimeError(f"Resend devolveu HTTP {resp.status}")
+
+
+@app.get("/login/email")
+def login_email():
+    if not _resend_api_key():
+        abort(404)
+    csrf = _get_csrf_token()
+    return _page("Acesso por email", f"""
+    <div class="card">
+      <h2 style="margin-top:0">Acesso por email institucional</h2>
+      <p>Introduza o seu email UP no formato <b>upNNNNNN@up.pt</b>.<br>
+         Receberá um código de acesso válido por 10 minutos.</p>
+      <form method="post" action="{url_for('login_email_post')}">
+        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <div class="row" style="align-items:center; gap:10px; max-width:400px;">
+          <label style="width:60px; min-width:60px;">Email:</label>
+          <input name="email" type="email" autocomplete="email"
+                 placeholder="upNNNNNN@up.pt" required style="width:240px;">
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button type="submit">Enviar código</button>
+        </div>
+      </form>
+      <p style="margin-top:16px;"><a href="{url_for('login')}">&#8592; Voltar ao login SIGARRA</a></p>
+    </div>""")
+
+
+@app.post("/login/email")
+@_limiter.limit("5 per minute; 20 per hour")
+def login_email_post():
+    if not _resend_api_key():
+        abort(404)
+    _require_csrf()
+    email = (request.form.get("email") or "").strip().lower()
+    codigo = _codigo_de_email_otp(email)
+    if not codigo:
+        return _page("Acesso por email", f"""
+        <div class="card">
+          <p><b>Email não reconhecido.</b> Use o formato <b>upNNNNNN@up.pt</b>.</p>
+          <p><a href="{url_for('login_email')}">Tentar novamente</a></p>
+        </div>""")
+
+    otp = "{:06d}".format(secrets.randbelow(1_000_000))
+    _purge_expired_otps()
+    with _OTPS_LOCK:
+        _OTPS[email] = {"otp": otp, "codigo": codigo, "expires": time.time() + 600}
+
+    try:
+        _send_otp_email(email, otp)
+    except Exception as e:
+        app.logger.warning("login_email_post: erro ao enviar OTP para %s: %s", email, e)
+        return _page("Acesso por email", f"""
+        <div class="card">
+          <p><b>Erro ao enviar email.</b> Tente mais tarde ou use o login SIGARRA.</p>
+          <p><a href="{url_for('login')}">Login SIGARRA</a></p>
+        </div>""")
+
+    csrf = _get_csrf_token()
+    return _page("Acesso por email", f"""
+    <div class="card">
+      <h2 style="margin-top:0">Introduza o código recebido</h2>
+      <p>Enviámos um código de 6 dígitos para <b>{_esc(email)}</b>.<br>
+         Válido por 10 minutos.</p>
+      <form method="post" action="{url_for('login_email_verificar')}">
+        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <input type="hidden" name="email" value="{_esc(email)}">
+        <div class="row" style="align-items:center; gap:10px; max-width:300px;">
+          <label style="width:60px; min-width:60px;">Código:</label>
+          <input name="otp" type="text" inputmode="numeric" pattern="[0-9]{{6}}"
+                 maxlength="6" autocomplete="one-time-code"
+                 placeholder="000000" required style="width:120px; font-size:1.3em; letter-spacing:0.15em;">
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button type="submit">Verificar</button>
+        </div>
+      </form>
+      <p style="margin-top:16px;"><a href="{url_for('login_email')}">Pedir novo código</a></p>
+    </div>""")
+
+
+@app.post("/login/email/verificar")
+@_limiter.limit("10 per minute")
+def login_email_verificar():
+    if not _resend_api_key():
+        abort(404)
+    _require_csrf()
+    email = (request.form.get("email") or "").strip().lower()
+    otp   = (request.form.get("otp")   or "").strip()
+
+    _purge_expired_otps()
+    with _OTPS_LOCK:
+        entry = _OTPS.get(email)
+        if not entry or entry["otp"] != otp or entry["expires"] < time.time():
+            return _page("Acesso por email", f"""
+            <div class="card">
+              <p><b>Código inválido ou expirado.</b></p>
+              <p><a href="{url_for('login_email')}">Pedir novo código</a></p>
+            </div>""")
+        codigo = entry["codigo"]
+        del _OTPS[email]   # single-use
+
+    try:
+        server_sess = _get_server_session()
+    except Exception as e:
+        app.logger.warning("login_email_verificar: sessão servidor indisponível: %s", e)
+        return _page("Acesso por email", f"""
+        <div class="card">
+          <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde ou use o login SIGARRA.</p>
+          <p><a href="{url_for('login')}">Login SIGARRA</a></p>
         </div>""")
 
     user_sess = server_sess.clone_para_utilizador(codigo)
