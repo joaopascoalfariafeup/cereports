@@ -519,7 +519,8 @@ def _save_reviews(reviews: list[dict]) -> None:
     REVIEWS_FILE.write_text(json.dumps(reviews, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensagem: str) -> str:
+def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensagem: str,
+                   owner_nome: str = "", reviewer_nome: str = "") -> str:
     token = secrets.token_urlsafe(24)
     now = time.time()
     owner_code = job.user_code or ""
@@ -534,8 +535,10 @@ def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensa
         "cur_id": job.cur_id,
         "owner_code": owner_code,
         "owner_email": f"up{owner_code}@up.pt" if owner_code else "",
+        "owner_nome": owner_nome,
         "reviewer_code": reviewer_code,
         "reviewer_email": reviewer_email,
+        "reviewer_nome": reviewer_nome,
         "mensagem": mensagem,
         "estado": "pendente",
         "criado_em": now,
@@ -569,6 +572,16 @@ def _reviews_for_user(code: str) -> list[dict]:
         and r.get("expira_em", 0) > now
         and r.get("estado") != "concluido"
     ]
+
+
+def _update_review_fields(token: str, **fields) -> None:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+        for r in reviews:
+            if r.get("token") == token:
+                r.update(fields)
+                break
+        _save_reviews(reviews)
 
 
 def _conclude_review(token: str) -> None:
@@ -2956,7 +2969,8 @@ def encaminhar_post(job_id: str):
     owner_email_str = f"up{owner_code_eff}@up.pt" if owner_code_eff else ""
 
     try:
-        token = _create_review(job, reviewer_code, reviewer_email, mensagem)
+        token = _create_review(job, reviewer_code, reviewer_email, mensagem,
+                               owner_nome=owner_nome)
         _send_review_email(
             reviewer_email=reviewer_email,
             ce_nome=job.ce_nome,
@@ -3023,12 +3037,18 @@ def revisao_get(token: str):
     ano_letivo = review.get("ano_letivo", "")
     perspetiva_label = _PERSPETIVA_LABELS_WEB.get(review.get("perspetiva", ""), "")
     owner_code = review.get("owner_code", "")
-    try:
-        _srv = _get_server_session()
-        _owner_c = obter_cargos_docente(_srv, owner_code)
-        owner_nome = _owner_c.get("nome", "")
-    except Exception:
-        owner_nome = ""
+    owner_nome = review.get("owner_nome", "")
+    reviewer_nome_saved = review.get("reviewer_nome", "")
+    if not owner_nome or not reviewer_nome_saved:
+        try:
+            _srv = _get_server_session()
+            if not owner_nome:
+                owner_nome = obter_cargos_docente(_srv, owner_code).get("nome", "")
+            if not reviewer_nome_saved:
+                reviewer_nome_saved = obter_cargos_docente(_srv, eff_code).get("nome", "")
+            _update_review_fields(token, owner_nome=owner_nome, reviewer_nome=reviewer_nome_saved)
+        except Exception:
+            pass
     owner_display = f"{_esc(owner_nome)} ({_esc(owner_code)})" if owner_nome else _esc(owner_code)
     csrf = _get_csrf_token()
 
@@ -3166,18 +3186,11 @@ def revisao_concluir(token: str):
 
     _conclude_review(token)
 
-    # Notificar o autor original
+    # Notificar o autor original (nomes guardados no registo, sem chamar SIGARRA aqui)
     owner_email = review.get("owner_email", "")
     owner_code = review.get("owner_code", "")
-    try:
-        _srv = _get_server_session()
-        _rv_c = obter_cargos_docente(_srv, eff_code)
-        reviewer_nome = _rv_c.get("nome", "")
-        _ow_c = obter_cargos_docente(_srv, owner_code)
-        owner_nome = _ow_c.get("nome", "")
-    except Exception:
-        reviewer_nome = ""
-        owner_nome = ""
+    owner_nome = review.get("owner_nome", "")
+    reviewer_nome = review.get("reviewer_nome", "")
 
     try:
         _send_conclusion_email(
@@ -3310,7 +3323,8 @@ def encaminhar_revisao_post(token: str):
     rev_owner_email = f"up{eff_code}@up.pt" if eff_code else ""
 
     try:
-        new_token = _create_review(fake_job, reviewer_code, reviewer_email, mensagem)
+        new_token = _create_review(fake_job, reviewer_code, reviewer_email, mensagem,
+                                   owner_nome=rev_owner_nome)
         _send_review_email(
             reviewer_email=reviewer_email,
             ce_nome=review.get("ce_nome", ""),
