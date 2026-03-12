@@ -3103,37 +3103,28 @@ def revisao_get(token: str):
 
       <div class="card">
         <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <button type="submit" class="btn" name="action" value="download_html" id="btn-guardar-rev">Guardar HTML</button>
+          <button type="submit" class="btn" name="action" value="download_html"
+                  onclick="window._rev_baixado=true;">Guardar HTML</button>
           <span style="color:#ccc;">|</span>
-          <button type="button" class="btn" id="btn-concluir-rev">Concluir revisão</button>
-          {'<span style="color:#ccc;">|</span><a href="' + url_for("encaminhar_revisao_get", token=token) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
+          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Encaminhar para revisão</a><span style="color:#ccc;">|</span>' if _resend_api_key() else ''}
         </div>
       </div>
     </form>
 
-    <form method="post" action="{url_for('revisao_concluir', token=token)}" id="form-concluir" style="display:none">
+    <form method="post" action="{url_for('revisao_concluir', token=token)}"
+          onsubmit="if(window._rev_editado && !window._rev_baixado){{ return confirm('Efetuou alterações mas ainda não guardou o HTML. Pretende mesmo assim concluir?'); }} return true;">
       <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+      <div class="card">
+        <button type="submit" class="btn">Concluir revisão</button>
+      </div>
     </form>
 
     <script>
     (function() {{
-      var baixado = false;
-      var editado = false;
-      document.getElementById('btn-guardar-rev').addEventListener('click', function() {{
-        baixado = true;
-      }});
       var bloco = document.getElementById('parecer-rev-block');
       if (bloco) {{
-        bloco.addEventListener('input', function() {{ editado = true; baixado = false; }});
+        bloco.addEventListener('input', function() {{ window._rev_editado = true; window._rev_baixado = false; }});
       }}
-      document.getElementById('btn-concluir-rev').addEventListener('click', function() {{
-        if (editado && !baixado) {{
-          if (!confirm('Efetuou alterações ao parecer mas ainda não guardou o HTML. Pretende mesmo assim concluir?')) {{
-            return;
-          }}
-        }}
-        document.getElementById('form-concluir').submit();
-      }});
     }})();
     </script>
     """
