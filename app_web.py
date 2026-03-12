@@ -388,14 +388,26 @@ def _perspetivas_disponiveis(
     is_cp: bool,
     ca_set: set,
     director_set: set,
+    is_admin: bool = False,
 ) -> list[dict]:
     """Devolve lista de {value, label} de perspetivas disponíveis para um CE.
 
     O diretor de um CE não pode emitir parecer sobre o próprio CE em nome
     de CC/CP/CA — apenas auto-avaliação (DCE).
+    Admins têm acesso a todas as perspetivas para qualquer CE.
     """
     tipo = ce.get("tipo", "")
     cur_id = ce.get("cur_id", "")
+    if is_admin:
+        persp = [
+            {"value": "CC", "label": "Conselho Científico"},
+            {"value": "DCE", "label": "Diretor (auto-avaliação)"},
+        ]
+        if tipo in ("L", "M"):
+            persp.insert(1, {"value": "CP", "label": "Conselho Pedagógico"})
+        if tipo == "D":
+            persp.append({"value": "CA", "label": "Comissão de Acompanhamento"})
+        return persp
     # Diretor deste CE: só auto-avaliação (não pode emitir parecer de órgão
     # sobre um relatório que ele próprio elaborou)
     if cur_id in director_set:
@@ -2138,6 +2150,8 @@ def ces():
     _has_cargos = bool(_permit_tipos or _ca_ids or _director_ids)
 
     def _ce_permitido(ce: dict) -> tuple[bool, str]:
+        if is_admin:
+            return True, ""  # admin tem acesso a todos os CEs e perspetivas
         if ce["cur_id"] in _director_ids:
             return True, ""  # diretor pode solicitar auto-avaliação
         if not _has_cargos:
@@ -2227,7 +2241,9 @@ def ces():
                 permitido, motivo = _ce_permitido(ce)
                 disabled_attr = "" if permitido else f' disabled title="{_esc(motivo)}"'
                 sel = " selected" if ce["nome"] == last_ce_nome and permitido else ""
-                if _has_cargos:
+                if is_admin:
+                    persp_list = _perspetivas_disponiveis(ce, False, False, set(), set(), is_admin=True)
+                elif _has_cargos:
                     persp_list = _perspetivas_disponiveis(
                         ce, cargos["is_cc"], cargos["is_cp"], _ca_ids, _director_ids
                     )
@@ -2948,7 +2964,7 @@ def encaminhar_post(job_id: str):
         </div>"""
         return _page("Encaminhar para revisão", body), 400
 
-    if not _reviewer_tem_permissao(reviewer_code, job.cur_id, job.perspetiva):
+    if not _is_admin(sess) and not _reviewer_tem_permissao(reviewer_code, job.cur_id, job.perspetiva):
         perspetiva_label = _PERSPETIVA_LABELS_WEB.get(job.perspetiva, job.perspetiva)
         body = f"""
         <div class="card">
@@ -3289,7 +3305,7 @@ def encaminhar_revisao_post(token: str):
 
     perspetiva = review.get("perspetiva", "")
     cur_id = review.get("cur_id", "")
-    if not _reviewer_tem_permissao(reviewer_code, cur_id, perspetiva):
+    if not _is_admin(sess) and not _reviewer_tem_permissao(reviewer_code, cur_id, perspetiva):
         perspetiva_label = _PERSPETIVA_LABELS_WEB.get(perspetiva, perspetiva)
         body = f"""
         <div class="card">
