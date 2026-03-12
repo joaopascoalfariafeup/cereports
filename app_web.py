@@ -92,6 +92,18 @@ _MS_STATES_LOCK = threading.Lock()
 _OTPS: dict[str, dict] = {}
 _OTPS_LOCK = threading.Lock()
 
+# Revisões de pareceres: persistidas em disco
+REVIEWS_FILE = OUTPUT_DIR / "_reviews.json"
+_REVIEWS_LOCK = threading.Lock()
+REVIEW_TTL_DAYS = 30
+
+_PERSPETIVA_LABELS_WEB = {
+    "CC": "Conselho Científico (CC)",
+    "CP": "Conselho Pedagógico (CP)",
+    "CA": "Comissão de Acompanhamento (CA)",
+    "DCE": "Diretor do Ciclo de Estudos — Auto-avaliação (DCE)",
+}
+
 # Configuração Microsoft OAuth (lida após load_env())
 def _ms_config() -> dict:
     return {
@@ -493,6 +505,143 @@ def _is_admin(sess: SigarraSession) -> bool:
     return bool(sess.codigo_pessoal and sess.codigo_pessoal in _admin_codes())
 
 
+def _load_reviews() -> list[dict]:
+    try:
+        if REVIEWS_FILE.exists():
+            return json.loads(REVIEWS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _save_reviews(reviews: list[dict]) -> None:
+    REVIEWS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REVIEWS_FILE.write_text(json.dumps(reviews, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensagem: str) -> str:
+    token = secrets.token_urlsafe(24)
+    now = time.time()
+    record = {
+        "token": token,
+        "job_id": job.job_id,
+        "run_dir": str(job.run_dir),
+        "ce_nome": job.ce_nome,
+        "ano_letivo": job.ano_letivo,
+        "perspetiva": job.perspetiva,
+        "pv_id": job.pv_id,
+        "cur_id": job.cur_id,
+        "owner_code": job.user_code,
+        "reviewer_code": reviewer_code,
+        "reviewer_email": reviewer_email,
+        "mensagem": mensagem,
+        "criado_em": now,
+        "expira_em": now + REVIEW_TTL_DAYS * 86400,
+    }
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+        reviews.append(record)
+        _save_reviews(reviews)
+    return token
+
+
+def _get_review(token: str) -> dict | None:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+    now = time.time()
+    for r in reviews:
+        if r.get("token") == token and r.get("expira_em", 0) > now:
+            return r
+    return None
+
+
+def _reviews_for_user(code: str) -> list[dict]:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+    now = time.time()
+    return [r for r in reviews if r.get("reviewer_code") == code and r.get("expira_em", 0) > now]
+
+
+def _prune_reviews() -> None:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+        active = [r for r in reviews if r.get("expira_em", 0) > time.time()]
+        if len(active) != len(reviews):
+            _save_reviews(active)
+
+
+def _active_review_run_dirs() -> set[str]:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+    now = time.time()
+    return {r["run_dir"] for r in reviews if r.get("expira_em", 0) > now and "run_dir" in r}
+
+
+def _reviewer_tem_permissao(reviewer_code: str, cur_id: str, perspetiva: str) -> bool:
+    """Verifica se reviewer_code tem permissão para a perspetiva/CE, via sessão servidor."""
+    if reviewer_code in _admin_codes():
+        return True
+    try:
+        server_sess = _get_server_session()
+        cargos = obter_cargos_docente(server_sess, reviewer_code)
+    except Exception:
+        return False
+    if perspetiva == "CC":
+        return bool(cargos.get("is_cc"))
+    elif perspetiva == "CP":
+        return bool(cargos.get("is_cp") or cargos.get("is_cc"))
+    elif perspetiva == "CA":
+        ca_ids = {c["cur_id"] for c in cargos.get("cac_cursos", [])}
+        return cur_id in ca_ids
+    elif perspetiva == "DCE":
+        director_ids = {d["cur_id"] for d in cargos.get("director_cursos", [])}
+        return cur_id in director_ids
+    return False
+
+
+def _send_review_email(reviewer_email: str, ce_nome: str, ano_letivo: str, perspetiva: str,
+                        owner_code: str, token: str, mensagem: str) -> None:
+    api_key = _resend_api_key()
+    from_addr = _resend_from()
+    perspetiva_label = _PERSPETIVA_LABELS_WEB.get(perspetiva, perspetiva)
+    link = url_for("revisao_get", token=token, _external=True)
+    msg_block = (
+        f"<p><b>Mensagem de {html.escape(owner_code)}:</b><br>{html.escape(mensagem)}</p>"
+        if mensagem else ""
+    )
+    body_html = f"""
+<p>Foi-lhe enviado um pedido de revisão de parecer gerado com apoio de IA.</p>
+<ul>
+  <li><b>Ciclo de estudos:</b> {html.escape(ce_nome)}</li>
+  <li><b>Ano letivo:</b> {html.escape(ano_letivo)}</li>
+  <li><b>Perspetiva:</b> {html.escape(perspetiva_label)}</li>
+</ul>
+{msg_block}
+<p><a href="{link}">Clique aqui para aceder ao parecer e rever</a></p>
+<p style="color:#888;font-size:0.9em;">O link é válido por {REVIEW_TTL_DAYS} dias. Requer autenticação na aplicação.</p>
+"""
+    payload = json.dumps({
+        "from": from_addr,
+        "to": [reviewer_email],
+        "subject": f"Revisão de parecer — {ce_nome} {ano_letivo}",
+        "html": body_html,
+    }).encode()
+    req = _urllib_req.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "ucreports/1.0",
+        },
+        method="POST",
+    )
+    with _urllib_req.urlopen(req, timeout=10) as resp:
+        status = resp.status
+    if status not in (200, 201):
+        raise RuntimeError(f"Resend HTTP {status}")
+
+
 def _get_impersonated_code() -> str | None:
     return flask_session.get("impersonated_code") or None
 
@@ -518,11 +667,13 @@ def _reap_stuck_jobs() -> None:
 def _prune_output_dir() -> None:
     """Remove output dirs mais antigos que o tempo de retenção configurado."""
     _reap_stuck_jobs()
+    _prune_reviews()
     cutoff = time.time() - WEB_OUTPUT_RETENTION_HOURS * 3600
     if not OUTPUT_DIR.is_dir():
         return
+    protected = _active_review_run_dirs()
     for entry in OUTPUT_DIR.iterdir():
-        if entry.is_dir() and entry.stat().st_mtime < cutoff:
+        if entry.is_dir() and str(entry) not in protected and entry.stat().st_mtime < cutoff:
             try:
                 import shutil
                 shutil.rmtree(entry, ignore_errors=True)
@@ -2096,7 +2247,23 @@ def ces():
         </div>
       </form>"""
 
+    # Banner de revisões pendentes
+    eff_code_ces = _effective_codigo(sess)
+    pending_reviews = _reviews_for_user(eff_code_ces) if eff_code_ces else []
+    if pending_reviews:
+        items = "".join(
+            f'<li><a href="{url_for("revisao_get", token=r["token"])}">'
+            f'{_esc(r["ce_nome"])} {_esc(r["ano_letivo"])} '
+            f'({_esc(_PERSPETIVA_LABELS_WEB.get(r["perspetiva"], r["perspetiva"]))})'
+            f'</a> — pedido por {_esc(r["owner_code"])}</li>'
+            for r in pending_reviews
+        )
+        reviews_banner = f'<div class="card" style="border-left:4px solid #c00;"><p><b>Pareceres aguardando revisão sua:</b></p><ul style="margin:4px 0 0 20px;">{items}</ul></div>'
+    else:
+        reviews_banner = ""
+
     body = f"""
+    {reviews_banner}
     <div class="card">
       {impersonate_html}
       {cargos_html}
@@ -2542,7 +2709,8 @@ def preview(job_id: str):
           <div class="navbar-left">
             <button type="submit" class="btn" name="action" value="download_html">Guardar HTML</button>
           </div>
-          <div class="navbar-right">
+          <div class="navbar-right" style="gap:16px;">
+            {'<a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
             <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
           </div>
         </div>
@@ -2623,6 +2791,387 @@ def download_zip(job_id: str):
     ce_slug = re.sub(r"[^a-z0-9]+", "-", (job.ce_nome or "ce").lower()).strip("-")
     filename = f"parecer_{ce_slug}_{job.ano_letivo or 'na'}.zip".replace("/", "-")
     return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=filename)
+
+
+# ---------------------------------------------------------------------------
+# Encaminhar parecer para revisão
+# ---------------------------------------------------------------------------
+
+@app.get("/resultado/<job_id>/encaminhar")
+def encaminhar_get(job_id: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login", next=request.url))
+
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+    if not job or not job.done or not job.ok:
+        return _page("Erro", "<div class='card'><p class='status-err'>Tarefa não encontrada ou ainda em curso.</p></div>"), 404
+    if not _is_job_owner(job, sess):
+        abort(403)
+
+    csrf = _get_csrf_token()
+    perspetiva_label = _PERSPETIVA_LABELS_WEB.get(job.perspetiva, job.perspetiva)
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      <p class="muted">Perspetiva: {_esc(perspetiva_label)}</p>
+      <h3 style="margin-top:14px;">Encaminhar para revisão</h3>
+      <form method="post" action="{url_for('encaminhar_post', job_id=job_id)}">
+        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <div class="form-row-inline" style="align-items:flex-start;">
+          <label for="reviewer_email" style="padding-top:6px;">Email do revisor:</label>
+          <div>
+            <input type="email" name="reviewer_email" id="reviewer_email" required
+                   placeholder="upNNNNNN@up.pt" style="width:260px;">
+            <p class="muted" style="margin:2px 0 0;font-size:0.85em;">Email UP institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
+          </div>
+        </div>
+        <div class="form-row-inline" style="align-items:flex-start; margin-top:10px;">
+          <label for="mensagem" style="padding-top:6px;">Mensagem (opcional):</label>
+          <textarea name="mensagem" id="mensagem" rows="3" maxlength="500"
+                    style="width:360px; font-size:0.93em; resize:vertical;"
+                    placeholder="Contexto ou aspetos a considerar na revisão..."></textarea>
+        </div>
+        <div class="row" style="justify-content:flex-start; margin-top:14px; gap:10px;">
+          <button type="submit" class="btn">Enviar pedido de revisão</button>
+          <a class="btn btn-secondary" href="{url_for('preview', job_id=job_id)}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+    """
+    return _page("Encaminhar para revisão", body)
+
+
+@app.post("/resultado/<job_id>/encaminhar")
+def encaminhar_post(job_id: str):
+    _require_csrf()
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+    if not job or not job.done or not job.ok:
+        return _page("Erro", "<div class='card'><p class='status-err'>Tarefa não encontrada.</p></div>"), 404
+    if not _is_job_owner(job, sess):
+        abort(403)
+
+    reviewer_email = request.form.get("reviewer_email", "").strip().lower()
+    mensagem = request.form.get("mensagem", "").strip()[:500]
+
+    reviewer_code = _codigo_de_email_otp(reviewer_email)
+    if not reviewer_code:
+        csrf = _get_csrf_token()
+        perspetiva_label = _PERSPETIVA_LABELS_WEB.get(job.perspetiva, job.perspetiva)
+        body = f"""
+        <div class="card">
+          {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+          <p class="status-err">Email não reconhecido. Use um email UP no formato upNNNNNN@up.pt.</p>
+          <p><a href="{url_for('encaminhar_get', job_id=job_id)}">Tentar novamente</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 400
+
+    if not _reviewer_tem_permissao(reviewer_code, job.cur_id, job.perspetiva):
+        perspetiva_label = _PERSPETIVA_LABELS_WEB.get(job.perspetiva, job.perspetiva)
+        body = f"""
+        <div class="card">
+          {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+          <p class="status-err">O utilizador <b>{_esc(reviewer_email)}</b> não tem permissão para emitir parecer
+          na perspetiva <b>{_esc(perspetiva_label)}</b> para este ciclo de estudos.</p>
+          <p><a href="{url_for('encaminhar_get', job_id=job_id)}">Tentar com outro email</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 403
+
+    try:
+        token = _create_review(job, reviewer_code, reviewer_email, mensagem)
+        _send_review_email(
+            reviewer_email=reviewer_email,
+            ce_nome=job.ce_nome,
+            ano_letivo=job.ano_letivo,
+            perspetiva=job.perspetiva,
+            owner_code=_effective_codigo(sess),
+            token=token,
+            mensagem=mensagem,
+        )
+    except Exception as e:
+        body = f"""
+        <div class="card">
+          <p class="status-err">Erro ao enviar pedido de revisão: {_esc(str(e))}</p>
+          <p><a href="{url_for('encaminhar_get', job_id=job_id)}">Tentar novamente</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 500
+
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      <p class="status-ok">Pedido de revisão enviado para <b>{_esc(reviewer_email)}</b>.</p>
+      <p class="muted">O link é válido por {REVIEW_TTL_DAYS} dias.</p>
+      <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar ao início</a></p>
+    </div>"""
+    return _page("Revisão enviada", body)
+
+
+# ---------------------------------------------------------------------------
+# Página de revisão (acesso por token)
+# ---------------------------------------------------------------------------
+
+@app.get("/revisao/<token>")
+def revisao_get(token: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login", next=request.url))
+
+    review = _get_review(token)
+    if not review:
+        return _page("Ligação inválida", """
+        <div class='card'>
+          <p class='status-err'>Esta ligação é inválida ou expirou.</p>
+          <p><a href='/ces'>Ir para o início</a></p>
+        </div>"""), 404
+
+    eff_code = _effective_codigo(sess)
+    if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
+        return _page("Sem acesso", f"""
+        <div class='card'>
+          <p class='status-err'>Esta ligação de revisão é para outro utilizador.</p>
+          <p class='muted'>Autenticado como: {_esc(eff_code)}</p>
+          <p><a href='/ces'>Ir para o início</a></p>
+        </div>"""), 403
+
+    run_dir = Path(review["run_dir"])
+    parecer_path = run_dir / "parecer.html"
+    if not parecer_path.exists():
+        return _page("Erro", "<div class='card'><p class='status-err'>O ficheiro de parecer não foi encontrado. O conteúdo pode ter expirado.</p></div>"), 404
+
+    parecer_html = parecer_path.read_text(encoding="utf-8", errors="replace")
+    ce_nome = review.get("ce_nome", "")
+    ano_letivo = review.get("ano_letivo", "")
+    perspetiva_label = _PERSPETIVA_LABELS_WEB.get(review.get("perspetiva", ""), "")
+    owner_code = review.get("owner_code", "")
+    csrf = _get_csrf_token()
+
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(ce_nome, ano_letivo)}
+      {'<div class="muted">Perspetiva: ' + _esc(perspetiva_label) + '</div>' if perspetiva_label else ''}
+      <p class="muted" style="margin-top:6px;">Parecer enviado por <b>{_esc(owner_code)}</b> para revisão.</p>
+    </div>
+
+    <form method="post" action="{url_for('revisao_download', token=token)}" id="form-revisao">
+      <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+      <input type="hidden" name="field_parecer" id="field_parecer_rev" value="{_esc(parecer_html)}">
+
+      <div class="card">
+        <div class="editable-header" data-editable-id="parecer-rev">
+          <h3>Parecer</h3>
+          <div style="display:inline-flex; gap:8px; align-items:center;">
+            <span class="edit-counter" id="counter-parecer-rev"></span>
+            <button type="button" class="btn-cancel-edit" id="cancel-parecer-rev">Cancelar</button>
+            <button type="button" class="btn-edit" id="edit-parecer-rev">Editar</button>
+          </div>
+        </div>
+        <div class="edit-toolbar" id="toolbar-parecer-rev">
+          <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
+          <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
+          <button type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+          <span class="sep"></span>
+          <button type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button>
+          <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button>
+          <span class="sep"></span>
+          <button type="button" data-cmd="removeFormat" title="Limpar formatação">&#10005; Limpar</button>
+        </div>
+        <div class="preview-html" id="parecer-rev-block" data-field="parecer-rev">{parecer_html}</div>
+      </div>
+
+      <div class="card">
+        <div class="navbar">
+          <div class="navbar-left">
+            <button type="submit" class="btn" name="action" value="download_html">Guardar HTML</button>
+          </div>
+          <div class="navbar-right" style="gap:16px;">
+            {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
+          </div>
+        </div>
+      </div>
+    </form>
+    """
+    return _page("Revisão de parecer", body)
+
+
+@app.post("/revisao/<token>/download")
+def revisao_download(token: str):
+    _require_csrf()
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+
+    review = _get_review(token)
+    if not review:
+        abort(404)
+
+    eff_code = _effective_codigo(sess)
+    if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
+        abort(403)
+
+    parecer_html = request.form.get("field_parecer", "").strip()
+    ce_nome = review.get("ce_nome", "ce")
+    ano_letivo = review.get("ano_letivo", "na")
+    ce_slug = re.sub(r"[^a-z0-9]+", "-", ce_nome.lower()).strip("-")
+    filename = f"parecer_{ce_slug}_{ano_letivo}.html".replace("/", "-")
+
+    html_doc = f"""<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <title>Parecer — {html.escape(ce_nome)} — {html.escape(ano_letivo)}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }}
+    h3 {{ color: #1a1a1a; }}
+    ul {{ margin: 8px 0 12px 20px; }}
+    li {{ margin: 4px 0; }}
+  </style>
+</head>
+<body>
+{parecer_html}
+</body>
+</html>"""
+
+    return Response(
+        html_doc,
+        mimetype="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/revisao/<token>/encaminhar")
+def encaminhar_revisao_get(token: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login", next=request.url))
+
+    review = _get_review(token)
+    if not review:
+        return _page("Ligação inválida", "<div class='card'><p class='status-err'>Esta ligação é inválida ou expirou.</p></div>"), 404
+
+    eff_code = _effective_codigo(sess)
+    if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
+        abort(403)
+
+    perspetiva_label = _PERSPETIVA_LABELS_WEB.get(review.get("perspetiva", ""), "")
+    csrf = _get_csrf_token()
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(review.get("ce_nome", ""), review.get("ano_letivo", ""))}
+      {'<p class="muted">Perspetiva: ' + _esc(perspetiva_label) + '</p>' if perspetiva_label else ''}
+      <h3 style="margin-top:14px;">Encaminhar para revisão</h3>
+      <form method="post" action="{url_for('encaminhar_revisao_post', token=token)}">
+        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <div class="form-row-inline" style="align-items:flex-start;">
+          <label for="reviewer_email2" style="padding-top:6px;">Email do revisor:</label>
+          <div>
+            <input type="email" name="reviewer_email" id="reviewer_email2" required
+                   placeholder="upNNNNNN@up.pt" style="width:260px;">
+            <p class="muted" style="margin:2px 0 0;font-size:0.85em;">Email UP institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
+          </div>
+        </div>
+        <div class="form-row-inline" style="align-items:flex-start; margin-top:10px;">
+          <label for="mensagem2" style="padding-top:6px;">Mensagem (opcional):</label>
+          <textarea name="mensagem" id="mensagem2" rows="3" maxlength="500"
+                    style="width:360px; font-size:0.93em; resize:vertical;"
+                    placeholder="Contexto ou aspetos a considerar na revisão..."></textarea>
+        </div>
+        <div class="row" style="justify-content:flex-start; margin-top:14px; gap:10px;">
+          <button type="submit" class="btn">Enviar pedido de revisão</button>
+          <a class="btn btn-secondary" href="{url_for('revisao_get', token=token)}">Cancelar</a>
+        </div>
+      </form>
+    </div>
+    """
+    return _page("Encaminhar para revisão", body)
+
+
+@app.post("/revisao/<token>/encaminhar")
+def encaminhar_revisao_post(token: str):
+    _require_csrf()
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+
+    review = _get_review(token)
+    if not review:
+        abort(404)
+
+    eff_code = _effective_codigo(sess)
+    if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
+        abort(403)
+
+    reviewer_email = request.form.get("reviewer_email", "").strip().lower()
+    mensagem = request.form.get("mensagem", "").strip()[:500]
+
+    reviewer_code = _codigo_de_email_otp(reviewer_email)
+    if not reviewer_code:
+        body = f"""
+        <div class="card">
+          <p class="status-err">Email não reconhecido. Use um email UP no formato upNNNNNN@up.pt.</p>
+          <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar novamente</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 400
+
+    perspetiva = review.get("perspetiva", "")
+    cur_id = review.get("cur_id", "")
+    if not _reviewer_tem_permissao(reviewer_code, cur_id, perspetiva):
+        perspetiva_label = _PERSPETIVA_LABELS_WEB.get(perspetiva, perspetiva)
+        body = f"""
+        <div class="card">
+          <p class="status-err">O utilizador <b>{_esc(reviewer_email)}</b> não tem permissão para emitir parecer
+          na perspetiva <b>{_esc(perspetiva_label)}</b> para este ciclo de estudos.</p>
+          <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar com outro email</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 403
+
+    # Criar novo review baseado no original (mesmos metadados, novo token, novo reviewer)
+    run_dir = Path(review["run_dir"])
+    # Construir um objeto mínimo compatível com _create_review
+    class _FakeJob:
+        pass
+    fake_job = _FakeJob()
+    fake_job.job_id = review.get("job_id", "")
+    fake_job.run_dir = run_dir
+    fake_job.ce_nome = review.get("ce_nome", "")
+    fake_job.ano_letivo = review.get("ano_letivo", "")
+    fake_job.perspetiva = perspetiva
+    fake_job.pv_id = review.get("pv_id", "")
+    fake_job.cur_id = cur_id
+    fake_job.user_code = eff_code
+
+    try:
+        new_token = _create_review(fake_job, reviewer_code, reviewer_email, mensagem)
+        _send_review_email(
+            reviewer_email=reviewer_email,
+            ce_nome=review.get("ce_nome", ""),
+            ano_letivo=review.get("ano_letivo", ""),
+            perspetiva=perspetiva,
+            owner_code=eff_code,
+            token=new_token,
+            mensagem=mensagem,
+        )
+    except Exception as e:
+        body = f"""
+        <div class="card">
+          <p class="status-err">Erro ao enviar pedido de revisão: {_esc(str(e))}</p>
+          <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar novamente</a></p>
+        </div>"""
+        return _page("Encaminhar para revisão", body), 500
+
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(review.get("ce_nome", ""), review.get("ano_letivo", ""))}
+      <p class="status-ok">Pedido de revisão enviado para <b>{_esc(reviewer_email)}</b>.</p>
+      <p class="muted">O link é válido por {REVIEW_TTL_DAYS} dias.</p>
+      <p><a class="btn btn-secondary" href="{url_for('revisao_get', token=token)}">Voltar ao parecer</a></p>
+    </div>"""
+    return _page("Revisão enviada", body)
 
 
 # ---------------------------------------------------------------------------
