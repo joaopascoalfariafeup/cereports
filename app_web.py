@@ -3106,7 +3106,7 @@ def revisao_get(token: str):
           <button type="submit" class="btn" name="action" value="download_html"
                   onclick="window._rev_baixado=true;">Guardar HTML</button>
           <span style="color:#ccc;">|</span>
-          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Encaminhar para revisão</a><span style="color:#ccc;">|</span>' if _resend_api_key() else ''}
+          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Reencaminhar</a><span style="color:#ccc;">|</span>' if _resend_api_key() else ''}
         </div>
       </div>
     </form>
@@ -3264,7 +3264,7 @@ def encaminhar_revisao_get(token: str):
       </form>
     </div>
     """
-    return _page("Encaminhar para revisão", body)
+    return _page("Reencaminhar para revisão", body)
 
 
 @app.post("/revisao/<token>/encaminhar")
@@ -3292,7 +3292,7 @@ def encaminhar_revisao_post(token: str):
           <p class="status-err">Email não reconhecido. Use um email UP no formato upNNNNNN@up.pt.</p>
           <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar novamente</a></p>
         </div>"""
-        return _page("Encaminhar para revisão", body), 400
+        return _page("Reencaminhar para revisão", body), 400
 
     perspetiva = review.get("perspetiva", "")
     cur_id = review.get("cur_id", "")
@@ -3304,7 +3304,7 @@ def encaminhar_revisao_post(token: str):
           na perspetiva <b>{_esc(perspetiva_label)}</b> para este ciclo de estudos.</p>
           <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar com outro email</a></p>
         </div>"""
-        return _page("Encaminhar para revisão", body), 403
+        return _page("Reencaminhar para revisão", body), 403
 
     # Criar novo review baseado no original (mesmos metadados, novo token, novo reviewer)
     run_dir = Path(review["run_dir"])
@@ -3349,7 +3349,7 @@ def encaminhar_revisao_post(token: str):
           <p class="status-err">Erro ao enviar pedido de revisão: {_esc(str(e))}</p>
           <p><a href="{url_for('encaminhar_revisao_get', token=token)}">Tentar novamente</a></p>
         </div>"""
-        return _page("Encaminhar para revisão", body), 500
+        return _page("Reencaminhar para revisão", body), 500
 
     body = f"""
     <div class="card">
