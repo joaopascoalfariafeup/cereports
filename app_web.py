@@ -3066,32 +3066,18 @@ def revisao_get(token: str):
       </div>
 
       <div class="card">
-        <div class="navbar">
-          <div class="navbar-left">
-            <button type="submit" class="btn" name="action" value="download_html" id="btn-guardar-rev">Guardar HTML</button>
-          </div>
-          <div class="navbar-right" style="gap:16px;">
-            {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
-          </div>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <button type="submit" class="btn" name="action" value="download_html" id="btn-guardar-rev">Guardar HTML</button>
+          <span style="color:#ccc;">|</span>
+          <button type="button" class="btn" id="btn-concluir-rev">Concluir revisão</button>
+          {'<span style="color:#ccc;">|</span><a href="' + url_for("encaminhar_revisao_get", token=token) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
         </div>
       </div>
     </form>
 
-    <div class="card" style="margin-top:8px; border-top:3px solid #ccc;">
-      <h3 style="margin-top:0;">Concluir revisão</h3>
-      <p class="muted">Após guardar o parecer revisto, conclua a revisão para notificar quem a solicitou.</p>
-      <form method="post" action="{url_for('revisao_concluir', token=token)}" id="form-concluir"
-            onsubmit="return confirmarConclusao(event)">
-        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-          <input type="checkbox" id="chk-guardado" required>
-          Confirmo que guardei o parecer revisto (ou não efetuei alterações).
-        </label>
-        <div style="margin-top:12px;">
-          <button type="submit" class="btn">Concluir revisão</button>
-        </div>
-      </form>
-    </div>
+    <form method="post" action="{url_for('revisao_concluir', token=token)}" id="form-concluir" style="display:none">
+      <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+    </form>
 
     <script>
     (function() {{
@@ -3104,15 +3090,14 @@ def revisao_get(token: str):
       if (bloco) {{
         bloco.addEventListener('input', function() {{ editado = true; baixado = false; }});
       }}
-      window.confirmarConclusao = function(e) {{
+      document.getElementById('btn-concluir-rev').addEventListener('click', function() {{
         if (editado && !baixado) {{
           if (!confirm('Efetuou alterações ao parecer mas ainda não guardou o HTML. Pretende mesmo assim concluir?')) {{
-            e.preventDefault();
-            return false;
+            return;
           }}
         }}
-        return true;
-      }};
+        document.getElementById('form-concluir').submit();
+      }});
     }})();
     </script>
     """
