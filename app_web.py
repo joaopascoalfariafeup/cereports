@@ -600,17 +600,19 @@ def _reviewer_tem_permissao(reviewer_code: str, cur_id: str, perspetiva: str) ->
 
 
 def _send_review_email(reviewer_email: str, ce_nome: str, ano_letivo: str, perspetiva: str,
-                        owner_code: str, token: str, mensagem: str) -> None:
+                        owner_code: str, owner_nome: str, owner_email: str,
+                        token: str, mensagem: str) -> None:
     api_key = _resend_api_key()
     from_addr = _resend_from()
     perspetiva_label = _PERSPETIVA_LABELS_WEB.get(perspetiva, perspetiva)
     link = url_for("revisao_get", token=token, _external=True)
+    owner_display = f"{html.escape(owner_nome)} ({html.escape(owner_code)})" if owner_nome else html.escape(owner_code)
     msg_block = (
-        f"<p><b>Mensagem de {html.escape(owner_code)}:</b><br>{html.escape(mensagem)}</p>"
+        f"<p><b>Mensagem:</b><br>{html.escape(mensagem)}</p>"
         if mensagem else ""
     )
     body_html = f"""
-<p>Foi-lhe enviado um pedido de revisão de parecer gerado com apoio de IA.</p>
+<p>{owner_display} enviou-lhe um pedido de revisão de parecer gerado com apoio de IA.</p>
 <ul>
   <li><b>Ciclo de estudos:</b> {html.escape(ce_nome)}</li>
   <li><b>Ano letivo:</b> {html.escape(ano_letivo)}</li>
@@ -620,12 +622,15 @@ def _send_review_email(reviewer_email: str, ce_nome: str, ano_letivo: str, persp
 <p><a href="{link}">Clique aqui para aceder ao parecer e rever</a></p>
 <p style="color:#888;font-size:0.9em;">O link é válido por {REVIEW_TTL_DAYS} dias. Requer autenticação na aplicação.</p>
 """
-    payload = json.dumps({
+    mail_payload: dict = {
         "from": from_addr,
         "to": [reviewer_email],
         "subject": f"Revisão de parecer — {ce_nome} {ano_letivo}",
         "html": body_html,
-    }).encode()
+    }
+    if owner_email:
+        mail_payload["cc"] = [owner_email]
+    payload = json.dumps(mail_payload).encode()
     req = _urllib_req.Request(
         "https://api.resend.com/emails",
         data=payload,
@@ -2816,16 +2821,12 @@ def encaminhar_get(job_id: str):
     <div class="card">
       {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
       <p class="muted">Perspetiva: {_esc(perspetiva_label)}</p>
-      <h3 style="margin-top:14px;">Encaminhar para revisão</h3>
-      <form method="post" action="{url_for('encaminhar_post', job_id=job_id)}">
+      <form method="post" action="{url_for('encaminhar_post', job_id=job_id)}" style="margin-top:14px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-        <div class="form-row-inline" style="align-items:flex-start;">
-          <label for="reviewer_email" style="padding-top:6px;">Email do revisor:</label>
-          <div>
-            <input type="email" name="reviewer_email" id="reviewer_email" required
-                   placeholder="upNNNNNN@up.pt" style="width:260px;">
-            <p class="muted" style="margin:2px 0 0;font-size:0.85em;">Email UP institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
-          </div>
+        <div class="form-row-inline">
+          <label for="reviewer_email">Email UP institucional do revisor:</label>
+          <input type="email" name="reviewer_email" id="reviewer_email" required
+                 placeholder="upNNNNNN@...up.pt" style="width:240px;">
         </div>
         <div class="form-row-inline" style="align-items:flex-start; margin-top:10px;">
           <label for="mensagem" style="padding-top:6px;">Mensagem (opcional):</label>
@@ -2883,6 +2884,15 @@ def encaminhar_post(job_id: str):
         </div>"""
         return _page("Encaminhar para revisão", body), 403
 
+    owner_code_eff = _effective_codigo(sess)
+    try:
+        server_sess_enc = _get_server_session()
+        owner_cargos = obter_cargos_docente(server_sess_enc, owner_code_eff)
+        owner_nome = owner_cargos.get("nome", "")
+    except Exception:
+        owner_nome = ""
+    owner_email_str = f"up{owner_code_eff}@up.pt" if owner_code_eff else ""
+
     try:
         token = _create_review(job, reviewer_code, reviewer_email, mensagem)
         _send_review_email(
@@ -2890,7 +2900,9 @@ def encaminhar_post(job_id: str):
             ce_nome=job.ce_nome,
             ano_letivo=job.ano_letivo,
             perspetiva=job.perspetiva,
-            owner_code=_effective_codigo(sess),
+            owner_code=owner_code_eff,
+            owner_nome=owner_nome,
+            owner_email=owner_email_str,
             token=token,
             mensagem=mensagem,
         )
@@ -3064,16 +3076,12 @@ def encaminhar_revisao_get(token: str):
     <div class="card">
       {_ce_titulo_html(review.get("ce_nome", ""), review.get("ano_letivo", ""))}
       {'<p class="muted">Perspetiva: ' + _esc(perspetiva_label) + '</p>' if perspetiva_label else ''}
-      <h3 style="margin-top:14px;">Encaminhar para revisão</h3>
-      <form method="post" action="{url_for('encaminhar_revisao_post', token=token)}">
+      <form method="post" action="{url_for('encaminhar_revisao_post', token=token)}" style="margin-top:14px;">
         <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-        <div class="form-row-inline" style="align-items:flex-start;">
-          <label for="reviewer_email2" style="padding-top:6px;">Email do revisor:</label>
-          <div>
-            <input type="email" name="reviewer_email" id="reviewer_email2" required
-                   placeholder="upNNNNNN@up.pt" style="width:260px;">
-            <p class="muted" style="margin:2px 0 0;font-size:0.85em;">Email UP institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
-          </div>
+        <div class="form-row-inline">
+          <label for="reviewer_email2">Email UP institucional do revisor:</label>
+          <input type="email" name="reviewer_email" id="reviewer_email2" required
+                 placeholder="upNNNNNN@...up.pt" style="width:240px;">
         </div>
         <div class="form-row-inline" style="align-items:flex-start; margin-top:10px;">
           <label for="mensagem2" style="padding-top:6px;">Mensagem (opcional):</label>
@@ -3146,6 +3154,14 @@ def encaminhar_revisao_post(token: str):
     fake_job.user_code = eff_code
 
     try:
+        server_sess_rev = _get_server_session()
+        rev_owner_cargos = obter_cargos_docente(server_sess_rev, eff_code)
+        rev_owner_nome = rev_owner_cargos.get("nome", "")
+    except Exception:
+        rev_owner_nome = ""
+    rev_owner_email = f"up{eff_code}@up.pt" if eff_code else ""
+
+    try:
         new_token = _create_review(fake_job, reviewer_code, reviewer_email, mensagem)
         _send_review_email(
             reviewer_email=reviewer_email,
@@ -3153,6 +3169,8 @@ def encaminhar_revisao_post(token: str):
             ano_letivo=review.get("ano_letivo", ""),
             perspetiva=perspetiva,
             owner_code=eff_code,
+            owner_nome=rev_owner_nome,
+            owner_email=rev_owner_email,
             token=new_token,
             mensagem=mensagem,
         )
