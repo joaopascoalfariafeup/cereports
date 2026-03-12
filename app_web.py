@@ -522,6 +522,7 @@ def _save_reviews(reviews: list[dict]) -> None:
 def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensagem: str) -> str:
     token = secrets.token_urlsafe(24)
     now = time.time()
+    owner_code = job.user_code or ""
     record = {
         "token": token,
         "job_id": job.job_id,
@@ -531,10 +532,12 @@ def _create_review(job: "Tarefa", reviewer_code: str, reviewer_email: str, mensa
         "perspetiva": job.perspetiva,
         "pv_id": job.pv_id,
         "cur_id": job.cur_id,
-        "owner_code": job.user_code,
+        "owner_code": owner_code,
+        "owner_email": f"up{owner_code}@up.pt" if owner_code else "",
         "reviewer_code": reviewer_code,
         "reviewer_email": reviewer_email,
         "mensagem": mensagem,
+        "estado": "pendente",
         "criado_em": now,
         "expira_em": now + REVIEW_TTL_DAYS * 86400,
     }
@@ -556,10 +559,27 @@ def _get_review(token: str) -> dict | None:
 
 
 def _reviews_for_user(code: str) -> list[dict]:
+    """Devolve revisões pendentes (não concluídas) para o utilizador."""
     with _REVIEWS_LOCK:
         reviews = _load_reviews()
     now = time.time()
-    return [r for r in reviews if r.get("reviewer_code") == code and r.get("expira_em", 0) > now]
+    return [
+        r for r in reviews
+        if r.get("reviewer_code") == code
+        and r.get("expira_em", 0) > now
+        and r.get("estado") != "concluido"
+    ]
+
+
+def _conclude_review(token: str) -> None:
+    with _REVIEWS_LOCK:
+        reviews = _load_reviews()
+        for r in reviews:
+            if r.get("token") == token:
+                r["estado"] = "concluido"
+                r["concluido_em"] = time.time()
+                break
+        _save_reviews(reviews)
 
 
 def _prune_reviews() -> None:
@@ -631,6 +651,48 @@ def _send_review_email(reviewer_email: str, ce_nome: str, ano_letivo: str, persp
     if owner_email:
         mail_payload["cc"] = [owner_email]
     payload = json.dumps(mail_payload).encode()
+    req = _urllib_req.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "ucreports/1.0",
+        },
+        method="POST",
+    )
+    with _urllib_req.urlopen(req, timeout=10) as resp:
+        status = resp.status
+    if status not in (200, 201):
+        raise RuntimeError(f"Resend HTTP {status}")
+
+
+def _send_conclusion_email(owner_email: str, owner_nome: str, owner_code: str,
+                            reviewer_code: str, reviewer_nome: str,
+                            ce_nome: str, ano_letivo: str, perspetiva: str) -> None:
+    if not owner_email:
+        return
+    api_key = _resend_api_key()
+    if not api_key:
+        return
+    from_addr = _resend_from()
+    perspetiva_label = _PERSPETIVA_LABELS_WEB.get(perspetiva, perspetiva)
+    reviewer_display = f"{html.escape(reviewer_nome)} ({html.escape(reviewer_code)})" if reviewer_nome else html.escape(reviewer_code)
+    body_html = f"""
+<p>{reviewer_display} concluiu a revisão do seguinte parecer:</p>
+<ul>
+  <li><b>Ciclo de estudos:</b> {html.escape(ce_nome)}</li>
+  <li><b>Ano letivo:</b> {html.escape(ano_letivo)}</li>
+  <li><b>Perspetiva:</b> {html.escape(perspetiva_label)}</li>
+</ul>
+<p style="color:#888;font-size:0.9em;">O parecer revisto foi guardado pelo revisor.</p>
+"""
+    payload = json.dumps({
+        "from": from_addr,
+        "to": [owner_email],
+        "subject": f"Revisão concluída — {ce_nome} {ano_letivo}",
+        "html": body_html,
+    }).encode()
     req = _urllib_req.Request(
         "https://api.resend.com/emails",
         data=payload,
@@ -2961,13 +3023,20 @@ def revisao_get(token: str):
     ano_letivo = review.get("ano_letivo", "")
     perspetiva_label = _PERSPETIVA_LABELS_WEB.get(review.get("perspetiva", ""), "")
     owner_code = review.get("owner_code", "")
+    try:
+        _srv = _get_server_session()
+        _owner_c = obter_cargos_docente(_srv, owner_code)
+        owner_nome = _owner_c.get("nome", "")
+    except Exception:
+        owner_nome = ""
+    owner_display = f"{_esc(owner_nome)} ({_esc(owner_code)})" if owner_nome else _esc(owner_code)
     csrf = _get_csrf_token()
 
     body = f"""
     <div class="card">
       {_ce_titulo_html(ce_nome, ano_letivo)}
       {'<div class="muted">Perspetiva: ' + _esc(perspetiva_label) + '</div>' if perspetiva_label else ''}
-      <p class="muted" style="margin-top:6px;">Parecer enviado por <b>{_esc(owner_code)}</b> para revisão.</p>
+      <p class="muted" style="margin-top:6px;">Parecer enviado por <b>{owner_display}</b> para revisão.</p>
     </div>
 
     <form method="post" action="{url_for('revisao_download', token=token)}" id="form-revisao">
@@ -2999,7 +3068,7 @@ def revisao_get(token: str):
       <div class="card">
         <div class="navbar">
           <div class="navbar-left">
-            <button type="submit" class="btn" name="action" value="download_html">Guardar HTML</button>
+            <button type="submit" class="btn" name="action" value="download_html" id="btn-guardar-rev">Guardar HTML</button>
           </div>
           <div class="navbar-right" style="gap:16px;">
             {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
@@ -3007,6 +3076,45 @@ def revisao_get(token: str):
         </div>
       </div>
     </form>
+
+    <div class="card" style="margin-top:8px; border-top:3px solid #ccc;">
+      <h3 style="margin-top:0;">Concluir revisão</h3>
+      <p class="muted">Após guardar o parecer revisto, conclua a revisão para notificar quem a solicitou.</p>
+      <form method="post" action="{url_for('revisao_concluir', token=token)}" id="form-concluir"
+            onsubmit="return confirmarConclusao(event)">
+        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="chk-guardado" required>
+          Confirmo que guardei o parecer revisto (ou não efetuei alterações).
+        </label>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn">Concluir revisão</button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+    (function() {{
+      var baixado = false;
+      var editado = false;
+      document.getElementById('btn-guardar-rev').addEventListener('click', function() {{
+        baixado = true;
+      }});
+      var bloco = document.getElementById('parecer-rev-block');
+      if (bloco) {{
+        bloco.addEventListener('input', function() {{ editado = true; baixado = false; }});
+      }}
+      window.confirmarConclusao = function(e) {{
+        if (editado && !baixado) {{
+          if (!confirm('Efetuou alterações ao parecer mas ainda não guardou o HTML. Pretende mesmo assim concluir?')) {{
+            e.preventDefault();
+            return false;
+          }}
+        }}
+        return true;
+      }};
+    }})();
+    </script>
     """
     return _page("Revisão de parecer", body)
 
@@ -3054,6 +3162,61 @@ def revisao_download(token: str):
         mimetype="text/html; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.post("/revisao/<token>/concluir")
+def revisao_concluir(token: str):
+    _require_csrf()
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+
+    review = _get_review(token)
+    if not review:
+        abort(404)
+
+    eff_code = _effective_codigo(sess)
+    if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
+        abort(403)
+
+    _conclude_review(token)
+
+    # Notificar o autor original
+    owner_email = review.get("owner_email", "")
+    owner_code = review.get("owner_code", "")
+    try:
+        _srv = _get_server_session()
+        _rv_c = obter_cargos_docente(_srv, eff_code)
+        reviewer_nome = _rv_c.get("nome", "")
+        _ow_c = obter_cargos_docente(_srv, owner_code)
+        owner_nome = _ow_c.get("nome", "")
+    except Exception:
+        reviewer_nome = ""
+        owner_nome = ""
+
+    try:
+        _send_conclusion_email(
+            owner_email=owner_email,
+            owner_nome=owner_nome,
+            owner_code=owner_code,
+            reviewer_code=eff_code,
+            reviewer_nome=reviewer_nome,
+            ce_nome=review.get("ce_nome", ""),
+            ano_letivo=review.get("ano_letivo", ""),
+            perspetiva=review.get("perspetiva", ""),
+        )
+    except Exception:
+        pass  # Falha de email não bloqueia conclusão
+
+    ce_nome = review.get("ce_nome", "")
+    ano_letivo = review.get("ano_letivo", "")
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(ce_nome, ano_letivo)}
+      <p class="status-ok"><b>Revisão concluída.</b>{' Foi enviado email de confirmação para ' + _esc(owner_email) + '.' if owner_email else ''}</p>
+      <p><a class="btn btn-secondary" href="{url_for('ces')}">Voltar ao início</a></p>
+    </div>"""
+    return _page("Revisão concluída", body)
 
 
 @app.get("/revisao/<token>/encaminhar")
