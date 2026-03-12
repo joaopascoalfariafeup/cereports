@@ -27,6 +27,7 @@ def analisar_ce(
     logger: AuditoriaLogger,
     pareceres_anteriores: str | None = None,
     perspetiva: str = "",
+    instrucoes: str = "",
 ) -> dict:
     """Pipeline de análise de um CE: HTML relatório → LLM → preview_payload.
 
@@ -62,6 +63,7 @@ def analisar_ce(
             logger=logger,
             pareceres_anteriores=pareceres_anteriores,
             perspetiva=perspetiva,
+            instrucoes=instrucoes,
         )
         custo_post = logger.total_custo_estimado() or 0.0
         custo_str = f" [~${custo_post - custo_pre:.4f}]" if custo_post > custo_pre else ""
@@ -87,6 +89,8 @@ def analisar_ce(
     )
     if perspetiva_label:
         user_prompt_txt += f"\n\nPerspetiva do parecer: {perspetiva_label}"
+    if instrucoes:
+        user_prompt_txt += f"\n\n## Instruções adicionais do utilizador\n\n{instrucoes}"
     if pareceres_anteriores:
         user_prompt_txt += (
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"

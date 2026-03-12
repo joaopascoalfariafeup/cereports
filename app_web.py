@@ -252,6 +252,7 @@ class Tarefa:
     pv_id: str = ""
     cur_id: str = ""
     perspetiva: str = ""
+    instrucoes: str = ""
     user_code: str = ""
     llm_provider: str = ""
     llm_modelo: str = ""
@@ -1200,9 +1201,9 @@ def login():
         <div class="row" style="margin-top:14px;">
           <button id="btn-login" type="submit">Autenticar</button>
         </div>
-        <p class="muted"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       </form>
-      {'<p style="margin:18px 0 0;font-size:0.9em;">Alternativa: <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
+      {'<p style="margin:14px 0 0;font-size:0.9em;">Alternativa: <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
+      <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;"><a href="' + url_for("login_microsoft") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Login com conta Microsoft UP</a></p>' if _ms_config()["client_id"] else ''}
     </div>
     """
@@ -2078,6 +2079,18 @@ def ces():
         </div>
         <p class="muted" style="margin:6px 0 0 160px;font-size:0.88em;">Sugestão: use o modelo gratuito para testes e o claude-opus-4-6 para o parecer final.</p>
 
+        <details style="margin-top:14px;"{' open' if flask_session.get('last_instrucoes') else ''}>
+          <summary style="cursor:pointer; color:#555; font-size:0.93em;">Instruções adicionais (opcional)</summary>
+          <div style="margin-top:8px;">
+            <textarea name="instrucoes" id="instrucoes" rows="4"
+              style="width:100%; max-width:600px; font-size:0.93em; resize:vertical;"
+              maxlength="2000"
+              placeholder="Preocupações específicas ou aspetos que pretende ver analisados..."
+              >{_esc(flask_session.get('last_instrucoes', ''))}</textarea>
+            <p class="muted" style="margin:2px 0 0; font-size:0.85em;">Máximo 2000 caracteres. Estas instruções serão incluídas no pedido ao LLM.</p>
+          </div>
+        </details>
+
         <div class="row" style="justify-content:flex-start; margin-top:14px;">
           <button class="btn" type="submit">Gerar parecer</button>
         </div>
@@ -2139,6 +2152,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 logger=log,
                 pareceres_anteriores=pareceres_anteriores,
                 perspetiva=job.perspetiva,
+                instrucoes=job.instrucoes,
             )
         job.ok = True
     except Exception as e:
@@ -2239,8 +2253,11 @@ def start_job():
         llm_provider = providers_validos[0]
         llm_modelo = _default_modelo_por_provider(llm_provider)
 
+    instrucoes = request.form.get("instrucoes", "").strip()[:2000]
+
     flask_session["last_llm_choice"] = llm_choice or f"{llm_provider}::{llm_modelo}"
     flask_session["last_ce_nome"] = ce_nome
+    flask_session["last_instrucoes"] = instrucoes
 
     # Verificar limite de custo mensal por utilizador
     user_code = (sess.codigo_pessoal or "").strip()
@@ -2283,6 +2300,7 @@ def start_job():
         pv_id=pv_id,
         cur_id=cur_id,
         perspetiva=perspetiva,
+        instrucoes=instrucoes,
         user_code=user_code,
         llm_provider=llm_provider,
         llm_modelo=llm_modelo,

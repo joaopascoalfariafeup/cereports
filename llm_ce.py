@@ -389,6 +389,7 @@ def analisar_relatorio_ce(
     logger: AuditoriaLogger | None = None,
     pareceres_anteriores: str | None = None,
     perspetiva: str = "",
+    instrucoes: str = "",
 ) -> str:
     """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
@@ -422,6 +423,8 @@ def analisar_relatorio_ce(
     )
     if perspetiva_label:
         user_text += f"\n\nPerspetiva do parecer: {perspetiva_label}"
+    if instrucoes:
+        user_text += f"\n\n## Instruções adicionais do utilizador\n\n{instrucoes}"
     if pareceres_anteriores:
         user_text += (
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"
