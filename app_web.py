@@ -2468,7 +2468,7 @@ def start_job():
 
     # Validação de permissões server-side
     eff_code = _effective_codigo(sess)
-    if eff_code and cur_id:
+    if eff_code and cur_id and not _is_admin(sess):
         cargos = obter_cargos_docente(sess, eff_code)
         permit_tipos: set[str] = set()
         if cargos["is_cp"]:
