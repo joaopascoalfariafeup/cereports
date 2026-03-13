@@ -1446,18 +1446,12 @@ def home():
 @app.get("/login")
 def login():
     csrf = _get_csrf_token()
-    _btn_style = "display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;"
-    _alt_btns = []
-    if _ms_config()["client_id"]:
-        _alt_btns.append(f'<a href="{url_for("login_microsoft")}" class="btn-secondary" style="{_btn_style}">Login com conta Microsoft UP</a>')
+    _alt_links = []
     if _oidc_config()["client_id"]:
-        _alt_btns.append(f'<a href="{url_for("login_oidc")}" class="btn-secondary" style="{_btn_style}">Autenticação federada UP</a>')
-    _nota_alt = '<p class="muted" style="margin:6px 0 0;font-size:0.85em;">Estes métodos permitem gerar pareceres mas não submeter diretamente no SIGARRA (requer login com password).</p>' if _alt_btns else ""
-    _alt_logins_html = (
-        '<hr style="margin:18px 0;">'
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">' + "".join(_alt_btns) + "</div>"
-        + _nota_alt
-    ) if _alt_btns else ""
+        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada UP</a> (não permite submeter no SIGARRA por agora)')
+    _alt_logins_html = "".join(
+        f'<p style="margin:10px 0 0;font-size:0.9em;">{l}</p>' for l in _alt_links
+    )
     body = f"""
     <div class="card">
       <form id="login-form" method="post" action="{url_for('login_post')}">
