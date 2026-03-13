@@ -1246,7 +1246,7 @@ def login():
     csrf = _get_csrf_token()
     _alt_links = []
     if _oidc_config()["client_id"]:
-        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada UP</a> (permite gerar parecer mas não submeter no SIGARRA por agora)')
+        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada</a> (permite gerar parecer mas não submeter no SIGARRA por agora)')
     _alt_logins_html = "".join(
         f'<p style="margin:10px 0 0;font-size:0.9em;">{l}</p>' for l in _alt_links
     )
@@ -1805,11 +1805,32 @@ def login_oidc_callback():
           <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
         </div>""")
 
+    # Decodificar claims dos tokens JWT para debug (sem verificação de assinatura)
+    def _jwt_claims(tok: str) -> dict:
+        try:
+            parts = tok.split(".")
+            if len(parts) < 2:
+                return {}
+            padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
+            return json.loads(base64.urlsafe_b64decode(padded))
+        except Exception:
+            return {}
+
+    _at_claims = _jwt_claims(token_data.get("access_token", ""))
+    _it_claims = _jwt_claims(token_data.get("id_token", ""))
+    _claims_summary = (
+        f"access_token claims: aud={_at_claims.get('aud')} azp={_at_claims.get('azp')} "
+        f"scope={_at_claims.get('scope')} iss={_at_claims.get('iss')} | "
+        f"id_token claims: aud={_it_claims.get('aud')} azp={_it_claims.get('azp')} "
+        f"scope={_it_claims.get('scope')}"
+    )
+    app.logger.info("login_oidc_callback: token claims — %s", _claims_summary)
+
     # Tentar obter sessão SIGARRA real via troca de token OIDC
     # Tenta access_token e id_token (o SIGARRA pode exigir um ou outro)
     user_sess = None
     flask_session.pop("oidc_sess_debug", None)
-    _debug_msgs = []
+    _debug_msgs = [_claims_summary]
     for _tok_key in ("access_token", "id_token"):
         _tok = token_data.get(_tok_key, "")
         if not _tok:
