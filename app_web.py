@@ -2032,6 +2032,9 @@ def login_oidc_callback():
               <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
             </div>""")
         user_sess = server_sess.clone_para_utilizador(codigo)
+        flask_session["oidc_sess_type"] = "clone"
+    else:
+        flask_session["oidc_sess_type"] = "direct"
 
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = username + "@up.pt"
@@ -2381,8 +2384,15 @@ def ces():
           {cargos_li_html}
         </div>"""
     else:
+        _oidc_sess_note = ""
+        if flask_session.get("login_method") == "oidc" and is_admin:
+            _oidc_sess_type = flask_session.get("oidc_sess_type", "")
+            if _oidc_sess_type == "direct":
+                _oidc_sess_note = ' <span style="color:green;font-size:0.85em;">(sessão SIGARRA direta)</span>'
+            elif _oidc_sess_type == "clone":
+                _oidc_sess_note = ' <span style="color:orange;font-size:0.85em;">(sessão clonada do servidor)</span>'
         cargos_html = f"""<div class="muted" style="margin:0 0 10px;font-size:0.9em;">
-          {f'<strong>{docente_label}</strong>' if docente_label else ''}
+          {f'<strong>{docente_label}</strong>{_oidc_sess_note}' if docente_label else ''}
           {cargos_li_html if cargos_li_html else ('<p style="margin:2px 0 0;">Sem cargos relevantes identificados no SIGARRA.</p>' if eff_code else '')}
         </div>"""
 
