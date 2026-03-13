@@ -1826,13 +1826,47 @@ def login_oidc_callback():
     )
     app.logger.info("login_oidc_callback: token claims — %s", _claims_summary)
 
+    # Tentar token exchange (RFC 8693) para obter access_token com aud=sigarra
+    # O access_token original tem aud=None; o SIGARRA precisa de ver-se no aud.
+    _EXCHANGE_AUDIENCES = ["sigarra", "https://sigarra.up.pt", "feup"]
+    _exchanged_token = ""
+    for _aud_candidate in _EXCHANGE_AUDIENCES:
+        try:
+            _xpayload = urllib.parse.urlencode({
+                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "subject_token": token_data.get("access_token", ""),
+                "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "audience": _aud_candidate,
+                "client_id": cfg["client_id"],
+                "client_secret": cfg["client_secret"],
+            }).encode()
+            _xreq = _urllib_req.Request(
+                cfg["token_endpoint"],
+                data=_xpayload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            with _urllib_req.urlopen(_xreq, timeout=15) as _xresp:
+                _xdata = json.loads(_xresp.read().decode())
+            _xtok = _xdata.get("access_token", "")
+            _xaud = _jwt_claims(_xtok).get("aud")
+            app.logger.info("login_oidc_callback: token exchange audience=%s → aud=%s", _aud_candidate, _xaud)
+            if _xtok:
+                _exchanged_token = _xtok
+                break
+        except Exception as _xe:
+            app.logger.info("login_oidc_callback: token exchange audience=%s falhou: %s", _aud_candidate, _xe)
+
     # Tentar obter sessão SIGARRA real via troca de token OIDC
-    # Tenta access_token e id_token (o SIGARRA pode exigir um ou outro)
+    # Ordem: token exchange (se obtido), access_token original, id_token
     user_sess = None
     flask_session.pop("oidc_sess_debug", None)
     _debug_msgs = [_claims_summary]
-    for _tok_key in ("access_token", "id_token"):
-        _tok = token_data.get(_tok_key, "")
+    _tok_candidates = []
+    if _exchanged_token:
+        _tok_candidates.append(("exchanged_token", _exchanged_token))
+    _tok_candidates += [(k, token_data.get(k, "")) for k in ("access_token", "id_token")]
+    for _tok_key, _tok in _tok_candidates:
         if not _tok:
             _debug_msgs.append(f"{_tok_key}: ausente")
             continue
