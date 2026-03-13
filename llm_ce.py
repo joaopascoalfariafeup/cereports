@@ -35,6 +35,7 @@ _SYSTEM_PROMPT: str | None = None
 
 def _preprocess_relatorio_html(html: str) -> str:
     """Converte <input type="text" value="..."> em texto legível pelo LLM.
+    Remove textareas de pareceres (pv_parecer_*) para não influenciar a geração.
 
     Os relatórios do SIGARRA usam inputs readonly para dados de empregabilidade
     inseridos manualmente. O LLM não lê atributos value — converte para <span>.
@@ -45,6 +46,10 @@ def _preprocess_relatorio_html(html: str) -> str:
         span = soup.new_tag("span")
         span.string = val if val else "—"
         inp.replace_with(span)
+    for ta in soup.find_all("textarea"):
+        name = (ta.get("name") or ta.get("id") or "").lower()
+        if name.startswith("pv_parecer_"):
+            ta.decompose()
     return str(soup)
 
 
