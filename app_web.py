@@ -2190,7 +2190,7 @@ def ces():
     _has_cargos = bool(_permit_tipos or _ca_ids or _director_ids)
 
     def _ce_permitido(ce: dict) -> tuple[bool, str]:
-        if is_admin:
+        if is_admin and not impersonated:
             return True, ""  # admin tem acesso a todos os CEs e perspetivas
         if ce["cur_id"] in _director_ids:
             return True, ""  # diretor pode solicitar auto-avaliação
