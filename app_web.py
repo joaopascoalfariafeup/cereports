@@ -1291,7 +1291,7 @@ def privacidade():
 
       <h4>Autenticação e comunicação segura</h4>
       <p>
-        A aplicação suporta dois métodos de autenticação, ambos protegidos por HTTPS/TLS:
+        A aplicação suporta três métodos de autenticação, todos protegidos por HTTPS/TLS:
       </p>
       <ul>
         <li>
@@ -1300,8 +1300,15 @@ def privacidade():
           As credenciais não são guardadas em disco nem registadas em logs.
         </li>
         <li>
-          <b>Acesso por email institucional (upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt):</b> o utilizador recebe um código
-          temporário de uso único por email (válido 10 minutos), enviado através do serviço
+          <b>Autenticação federada UP (Keycloak/SAML):</b> o utilizador autentica-se através do
+          sistema de identidade federada da Universidade do Porto (open-id.up.pt), sem que as
+          credenciais sejam transmitidas a esta aplicação. A sessão SIGARRA é estabelecida através
+          de uma conta de servidor com acesso alargado à consulta de relatórios de ciclos de estudos,
+          sendo o código do utilizador registado nos metadados de auditoria.
+        </li>
+        <li>
+          <b>Acesso por código OTP via email institucional (upNNNNNN@up.pt):</b> o utilizador recebe
+          um código temporário de uso único por email (válido 10 minutos), enviado através do serviço
           <a href="https://resend.com" target="_blank" rel="noopener">Resend</a>.
           O endereço de email não é guardado em disco após a verificação do código.
           A sessão SIGARRA é estabelecida através de uma conta de servidor com acesso alargado
