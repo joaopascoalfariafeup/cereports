@@ -35,7 +35,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra, obter_parecer_atual_sigarra
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -823,7 +823,7 @@ def _secure_headers(resp: Response):
 # Layout / CSS
 # ---------------------------------------------------------------------------
 
-_STEPPER_LABELS = ["Seleção", "Geração", "Revisão"]
+_STEPPER_LABELS = ["Seleção", "Geração", "Revisão", "Submissão"]
 
 
 def _stepper_html(step: int, logout_url: str = "") -> str:
@@ -2972,9 +2972,27 @@ def preview(job_id: str):
         and (job.perspetiva or "").upper() in ("CC", "CP", "CA")
         and bool(job.pv_id)
     )
+    # Verificar se já existe parecer no SIGARRA (aviso antes de sobrescrever)
+    _parecer_existente = ""
+    if _pode_submeter:
+        try:
+            _parecer_existente = obter_parecer_atual_sigarra(sess, job.pv_id, job.perspetiva)
+        except Exception:
+            pass
+    _aviso_existente = (
+        f'<p class="status-warn" style="margin-bottom:8px;">Atenção: já existe um parecer do '
+        f'{_esc((job.perspetiva or "").upper())} guardado no SIGARRA. A submissão irá substituí-lo.</p>'
+        if _parecer_existente else ""
+    )
+    _confirm_msg = (
+        "Já existe um parecer guardado no SIGARRA. Confirma que pretende substituí-lo?"
+        if _parecer_existente else
+        "Confirma a submissão do parecer no SIGARRA?"
+    )
     _btn_submeter = (
+        f'{_aviso_existente}'
         f'<button type="submit" name="action" value="submeter_sigarra" class="btn btn-primary"'
-        f' onclick="return confirm(\'Confirma a submissão do parecer no SIGARRA? Certifique-se de que guardou uma cópia antes.\');"'
+        f' onclick="return confirm({json.dumps(_confirm_msg)});"'
         f' id="btn-submeter">Submeter no SIGARRA</button>'
         if _pode_submeter else ""
     )
@@ -3064,21 +3082,8 @@ def download_parecer(job_id: str):
               <p class="status-err">Erro ao submeter no SIGARRA: {_esc(str(e))}</p>
               <p><a href="{url_for('resultado', job_id=job_id)}">Voltar ao parecer</a></p>
             </div>"""), 500
-        _pv = job.pv_id or ""
-        if _pv.startswith("3c:"):
-            _url_rel = f"https://sigarra.up.pt/feup/pt/relcur_geral.rel3c_edit?pv_id={_pv[3:]}&pv_print_ver=S"
-        elif _pv:
-            _url_rel = f"https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id={_pv}&pv_print_ver=S"
-        else:
-            _url_rel = ""
-        _link_ver = f'<p><a href="{_url_rel}" target="_blank" rel="noopener">Ver parecer no SIGARRA</a></p>' if _url_rel else ""
-        return _page("Parecer submetido", f"""
-        <div class="card">
-          {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
-          <p class="status-ok">Parecer submetido com sucesso no SIGARRA.</p>
-          {_link_ver}
-          <p><a href="{url_for('ces')}">Voltar ao início</a></p>
-        </div>""")
+        flask_session[f"submitted_{job_id}"] = True
+        return redirect(url_for("submissao_get", job_id=job_id))
 
     # Download como ficheiro de texto
     filename = f"parecer_{ce_slug}_{job.ano_letivo or 'na'}.txt".replace("/", "-")
@@ -3087,6 +3092,163 @@ def download_parecer(job_id: str):
         mimetype="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Passo 4 — Submissão concluída + Notificar para revisão
+# ---------------------------------------------------------------------------
+
+def _url_edit_sigarra(pv_id: str) -> str:
+    """URL da página de edição do relatório no SIGARRA (sem pv_print_ver)."""
+    if pv_id.startswith("3c:"):
+        return f"https://sigarra.up.pt/feup/pt/relcur_geral.rel3c_edit?pv_id={pv_id[3:]}"
+    return f"https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id={pv_id}"
+
+
+@app.get("/resultado/<job_id>/submissao")
+def submissao_get(job_id: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if not job or not _is_job_owner(job, sess):
+            abort(403)
+
+    submitted = flask_session.pop(f"submitted_{job_id}", False)
+    _pv = job.pv_id or ""
+    _url_edit = _url_edit_sigarra(_pv) if _pv else ""
+    _link_ver = (
+        f'<p><a href="{_url_edit}" target="_blank" rel="noopener">Ver/editar parecer no SIGARRA</a></p>'
+        if _url_edit else ""
+    )
+    _status_msg = '<p class="status-ok">Parecer submetido com sucesso no SIGARRA.</p>' if submitted else ""
+
+    _notif_html = ""
+    if _resend_api_key() and _url_edit:
+        csrf = _get_csrf_token()
+        _orgao_label = {
+            "CC": "Conselho Científico",
+            "CP": "Conselho Pedagógico",
+            "CA": "Comissão de Acompanhamento",
+        }.get((job.perspetiva or "").upper(), job.perspetiva or "")
+        _notif_html = f"""
+        <hr style="margin:20px 0;">
+        <h3 style="margin:0 0 10px;">Notificar para revisão</h3>
+        <p style="margin:0 0 12px;font-size:0.95em;">Envia um email a um membro do {_esc(_orgao_label)} com o link para o parecer no SIGARRA.</p>
+        <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
+          <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+          <div class="row" style="align-items:center;gap:10px;max-width:420px;">
+            <label style="min-width:80px;">Email UP:</label>
+            <input name="notif_email" type="email" placeholder="upNNNNNN@up.pt"
+                   pattern="up\\d{{6,9}}@(?:[\\w-]+\\.)*up\\.pt"
+                   title="Email institucional UP (up seguido de número)"
+                   style="flex:1;" required>
+            <button type="submit">Notificar</button>
+          </div>
+        </form>"""
+
+    body = f"""
+    <div class="card">
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      {_status_msg}
+      {_link_ver}
+      {_notif_html}
+      <p style="margin-top:20px;"><a href="{url_for('ces')}">Voltar ao início</a></p>
+    </div>"""
+    return _page("Submissão", body, step=4)
+
+
+@app.post("/resultado/<job_id>/notificar")
+@_limiter.limit("10 per minute")
+def notificar_post(job_id: str):
+    sess = _get_sigarra_session()
+    if not sess:
+        return redirect(url_for("login"))
+    _require_csrf()
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if not job or not _is_job_owner(job, sess):
+            abort(403)
+
+    notif_email = request.form.get("notif_email", "").strip().lower()
+    # Extrair código do email UP
+    _m = re.match(r"^up(\d{6,9})@(?:[\w-]+\.)*up\.pt$", notif_email)
+    if not _m:
+        return _page("Notificação", f"""
+        <div class="card">
+          <p class="status-err">Email inválido: deve ter o formato <code>upNNNNNN@up.pt</code>.</p>
+          <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
+        </div>"""), 400
+    dest_codigo = _m.group(1)
+
+    # Validar que o destinatário tem permissão (ou é admin)
+    if not _is_admin(sess) and not _reviewer_tem_permissao(dest_codigo, job.cur_id, job.perspetiva):
+        return _page("Notificação", f"""
+        <div class="card">
+          <p class="status-err">O destinatário não tem cargo que permita emitir parecer de
+          {_esc((job.perspetiva or "").upper())} para este ciclo de estudos.</p>
+          <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
+        </div>"""), 403
+
+    # Nome do emissor
+    eff = _effective_codigo(sess)
+    _cargos_emissor = obter_cargos_docente(sess, eff)
+    emissor_nome = _cargos_emissor.get("nome") or eff or "utilizador"
+
+    # Link de edição no SIGARRA
+    _pv = job.pv_id or ""
+    _url_edit = _url_edit_sigarra(_pv) if _pv else ""
+    _orgao_label = {
+        "CC": "Conselho Científico",
+        "CP": "Conselho Pedagógico",
+        "CA": "Comissão de Acompanhamento",
+    }.get((job.perspetiva or "").upper(), job.perspetiva or "")
+
+    # Enviar email
+    resend_key = _resend_api_key()
+    _from = os.environ.get("RESEND_FROM", "noreply@ce.uc-reports.com")
+    assunto = f"Parecer {_orgao_label} — {job.ce_nome} {job.ano_letivo} — notificação para revisão"
+    corpo = (
+        f"{emissor_nome} submeteu o parecer do {_orgao_label} relativo ao ciclo de estudos "
+        f'"{job.ce_nome}", ano letivo {job.ano_letivo}, e notifica-o para revisão.\n\n'
+    )
+    if _url_edit:
+        corpo += f"Pode consultar e editar o parecer diretamente no SIGARRA:\n{_url_edit}\n\n"
+    corpo += "Esta mensagem foi enviada automaticamente pelo sistema de pareceres de CEs da FEUP."
+
+    try:
+        _resend_body = json.dumps({
+            "from": _from,
+            "to": [notif_email],
+            "subject": assunto,
+            "text": corpo,
+        }).encode()
+        _resend_req = _urllib_req.Request(
+            "https://api.resend.com/emails",
+            data=_resend_body,
+            headers={
+                "Authorization": f"Bearer {resend_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "ucreports/1.0",
+            },
+        )
+        with _urllib_req.urlopen(_resend_req, timeout=15) as _r:
+            _r.read()
+    except Exception as e:
+        app.logger.warning("notificar_post: erro ao enviar email: %s", e)
+        return _page("Notificação", f"""
+        <div class="card">
+          <p class="status-err">Erro ao enviar email. Tente mais tarde.</p>
+          <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
+        </div>"""), 500
+
+    return _page("Notificação enviada", f"""
+    <div class="card">
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      <p class="status-ok">Email de notificação enviado para {_esc(notif_email)}.</p>
+      <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
+    </div>""", step=4)
 
 
 # ---------------------------------------------------------------------------

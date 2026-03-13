@@ -755,6 +755,30 @@ _SAVE_PARECER_URL = f"{SIGARRA_BASE}/relcur_geral.save_parecer"
 _ORGAOS_VALIDOS = {"CC", "CP", "CA"}
 
 
+def obter_parecer_atual_sigarra(sess: SigarraSession, pv_id: str, orgao: str) -> str:
+    """Obtém o texto do parecer atualmente guardado no SIGARRA para um órgão.
+
+    Devolve "" se o campo estiver vazio, se o órgão for inválido, ou em caso de erro.
+    """
+    orgao_up = (orgao or "").upper()
+    if orgao_up not in _ORGAOS_VALIDOS:
+        return ""
+    if pv_id.startswith("3c:"):
+        url = f"{SIGARRA_BASE}/relcur_geral.rel3c_edit?pv_id={pv_id[3:]}"
+    else:
+        url = f"{SIGARRA_BASE}/relcur_geral.proc_edit?pv_id={pv_id}"
+    try:
+        html_str = sess.fetch_html(url, timeout=15)
+    except Exception:
+        return ""
+    soup = BeautifulSoup(html_str, "html.parser")
+    campo = f"pv_parecer_{orgao_up.lower()}"
+    el = soup.find("textarea", {"name": campo}) or soup.find("textarea", {"id": campo})
+    if not el:
+        return ""
+    return el.get_text(separator="\n", strip=True)
+
+
 def submeter_parecer_sigarra(
     sess: SigarraSession,
     pv_id: str,
