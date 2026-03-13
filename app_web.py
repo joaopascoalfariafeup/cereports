@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Optional
 import urllib.request as _urllib_req
 
-from flask import Flask, request, session as flask_session, redirect, url_for, Response, abort, send_file
+from flask import Flask, request, session as flask_session, redirect, url_for, Response, abort, send_file, make_response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -1926,7 +1926,10 @@ def login_oidc():
         "response_mode": "query",
         "kc_idp_hint":   "saml",
     })
-    return redirect(f"{cfg['auth_endpoint']}?{params}", code=302)
+    resp = make_response(redirect(f"{cfg['auth_endpoint']}?{params}", code=302))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 @app.get("/login/oidc/callback")
