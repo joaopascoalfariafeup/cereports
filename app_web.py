@@ -1879,6 +1879,11 @@ def _resend_api_key() -> str:
     return (os.environ.get("RESEND_API_KEY") or "").strip()
 
 
+def _encaminhamento_ativo() -> bool:
+    return bool(_resend_api_key()) and os.environ.get("ENABLE_REVIEW_FORWARDING", "0").strip() == "1"
+
+
+
 def _resend_from() -> str:
     return (os.environ.get("RESEND_FROM") or "noreply@ce.uc-reports.com").strip()
 
@@ -2806,7 +2811,7 @@ def preview(job_id: str):
             <button type="submit" class="btn" name="action" value="download_html">Guardar HTML</button>
           </div>
           <div class="navbar-right" style="gap:16px;">
-            {'<a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _resend_api_key() else ''}
+            {'<a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _encaminhamento_ativo() else ''}
             <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
           </div>
         </div>
@@ -3106,7 +3111,7 @@ def revisao_get(token: str):
           <button type="submit" class="btn" name="action" value="download_html"
                   onclick="window._rev_baixado=true;">Guardar HTML</button>
           <span style="color:#ccc;">|</span>
-          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Reencaminhar</a><span style="color:#ccc;">|</span>' if _resend_api_key() else ''}
+          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Reencaminhar</a><span style="color:#ccc;">|</span>' if _encaminhamento_ativo() else ''}
         </div>
       </div>
     </form>
