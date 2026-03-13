@@ -2437,6 +2437,16 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 except Exception as e:
                     log.info(f"  Pareceres do ano anterior: erro ({e})")
 
+            # Fase 1c — se já existe parecer atual no SIGARRA, não enviar anteriores ao LLM
+            if pareceres_anteriores and job.pv_id and job.perspetiva:
+                try:
+                    _parecer_atual = obter_parecer_atual_sigarra(sess, job.pv_id, job.perspetiva)
+                    if _parecer_atual:
+                        pareceres_anteriores = None
+                        log.info("  Já existe parecer no SIGARRA — pareceres do ano anterior não enviados ao LLM")
+                except Exception:
+                    pass
+
             # Fase 2 — análise por LLM (logada internamente por analisar_ce)
             analisar_ce(
                 relatorio_html=relatorio_html,
