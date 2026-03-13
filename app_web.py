@@ -1721,29 +1721,18 @@ def login_oidc_callback():
             app.logger.info("login_oidc_callback: token exchange audience=%s falhou: %s", _aud_candidate, _xe)
 
     # Tentar obter sessão SIGARRA real via troca de token OIDC
-    # Ordem: token exchange (se obtido), access_token original, id_token
+    # A função tenta múltiplas estratégias (URLs, métodos, tokens)
     user_sess = None
     flask_session.pop("oidc_sess_debug", None)
-    _debug_msgs = [_claims_summary]
-    _tok_candidates = []
-    if _exchanged_token:
-        _tok_candidates.append(("exchanged_token", _exchanged_token))
-    _tok_candidates += [(k, token_data.get(k, "")) for k in ("access_token", "id_token")]
-    for _tok_key, _tok in _tok_candidates:
-        if not _tok:
-            _debug_msgs.append(f"{_tok_key}: ausente")
-            continue
-        try:
-            user_sess = SigarraSession.from_oidc_token(_tok, codigo)
-            app.logger.info("login_oidc_callback: sessão SIGARRA obtida via %s para %s", _tok_key, codigo)
-            flask_session["oidc_sess_debug"] = f"ok via {_tok_key}"
-            break
-        except Exception as e:
-            _err_msg = f"{_tok_key}: {e}"
-            app.logger.warning("login_oidc_callback: %s", _err_msg)
-            _debug_msgs.append(_err_msg)
-    if user_sess is None:
-        flask_session["oidc_sess_debug"] = " | ".join(_debug_msgs)
+    _at = _exchanged_token or token_data.get("access_token", "")
+    _it = token_data.get("id_token", "")
+    try:
+        user_sess = SigarraSession.from_oidc_token(_at, codigo, id_token=_it)
+        flask_session["oidc_sess_debug"] = "ok"
+        app.logger.info("login_oidc_callback: sessão SIGARRA obtida para %s", codigo)
+    except Exception as e:
+        app.logger.warning("login_oidc_callback: %s", e)
+        flask_session["oidc_sess_debug"] = f"{_claims_summary} | {e}"
 
     # Fallback: clonar sessão do servidor
     if user_sess is None:
