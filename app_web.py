@@ -2668,7 +2668,7 @@ def progress(job_id: str):
               <a class="btn" href="{url_for('preview', job_id=job_id)}">Rever parecer</a>
             </div>
             <div class="navbar-right">
-              <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar (.zip)</a>
+              <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
             </div>
           </div>
         </div>
