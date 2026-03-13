@@ -206,6 +206,47 @@ class SigarraSession:
 
         return dados
 
+    @classmethod
+    def from_oidc_token(cls, access_token: str, codigo: str) -> "SigarraSession":
+        """Cria uma SigarraSession a partir de um token OIDC Bearer.
+
+        Chama https://sigarra.up.pt/auth/oidc/token com Authorization: Bearer.
+        Se o token for válido, o SIGARRA devolve Set-Cookie com a sessão do utilizador.
+
+        Raises:
+            PermissionError: token inválido (HTTP 403) ou sem cookies na resposta.
+            ConnectionError: erro de rede.
+        """
+        sess = cls.__new__(cls)
+        sess._cookie_jar = http.cookiejar.CookieJar()
+        sess._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(sess._cookie_jar)
+        )
+        sess._lock = threading.Lock()
+        sess._autenticado = False
+        sess._codigo_pessoal = codigo
+        sess._http_retries = 2
+        sess._http_backoff_base = 0.7
+
+        url = "https://sigarra.up.pt/auth/oidc/token"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Authorization": f"Bearer {access_token}",
+        })
+        try:
+            with sess._lock:
+                sess._opener.open(req, timeout=15)
+            if not list(sess._cookie_jar):
+                raise PermissionError("SIGARRA não devolveu cookies de sessão para o token OIDC")
+            sess._autenticado = True
+            return sess
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                raise PermissionError("Token OIDC inválido ou sem acesso ao SIGARRA (HTTP 403)") from e
+            raise RuntimeError(f"Erro HTTP {e.code} ao trocar token OIDC por sessão SIGARRA") from e
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Erro de rede ao contactar endpoint OIDC SIGARRA: {e}") from e
+
     def clone_para_utilizador(self, codigo: str) -> "SigarraSession":
         """Cria uma SigarraSession com os cookies desta sessão mas para um utilizador diferente.
 

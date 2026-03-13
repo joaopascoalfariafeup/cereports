@@ -2010,17 +2010,29 @@ def login_oidc_callback():
           <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
         </div>""")
 
-    try:
-        server_sess = _get_server_session()
-    except Exception as e:
-        app.logger.warning("login_oidc_callback: sessão servidor indisponível: %s", e)
-        return _page("Autenticação federada", f"""
-        <div class="card">
-          <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde.</p>
-          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
-        </div>""")
+    # Tentar obter sessão SIGARRA real via troca de token OIDC
+    user_sess = None
+    access_token = token_data.get("access_token", "")
+    if access_token:
+        try:
+            user_sess = SigarraSession.from_oidc_token(access_token, codigo)
+            app.logger.info("login_oidc_callback: sessão SIGARRA obtida via token OIDC para %s", codigo)
+        except Exception as e:
+            app.logger.warning("login_oidc_callback: troca de token OIDC falhou, a usar clone: %s", e)
 
-    user_sess = server_sess.clone_para_utilizador(codigo)
+    # Fallback: clonar sessão do servidor
+    if user_sess is None:
+        try:
+            server_sess = _get_server_session()
+        except Exception as e:
+            app.logger.warning("login_oidc_callback: sessão servidor indisponível: %s", e)
+            return _page("Autenticação federada", f"""
+            <div class="card">
+              <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde.</p>
+              <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
+            </div>""")
+        user_sess = server_sess.clone_para_utilizador(codigo)
+
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = username + "@up.pt"
     flask_session["login_method"] = "oidc"
