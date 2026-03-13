@@ -2899,7 +2899,7 @@ def submissao_get(job_id: str):
     _pv = job.pv_id or ""
     _url_edit = _url_edit_sigarra(_pv) if _pv else ""
     _link_ver = (
-        f'<p><a href="{_url_edit}" target="_blank" rel="noopener">Ver/editar parecer no SIGARRA</a></p>'
+        f'<p><a href="{_url_edit}" target="_blank" rel="noopener">Ver/editar parecer no SIGARRA ↗</a></p>'
         if _url_edit else ""
     )
     _status_msg = '<p class="status-ok">Parecer submetido com sucesso no SIGARRA.</p>' if submitted else ""
@@ -2915,8 +2915,7 @@ def submissao_get(job_id: str):
         }.get((job.perspetiva or "").upper(), job.perspetiva or "")
         _notif_html = f"""
         <hr style="margin:20px 0;">
-        <h3 style="margin:0 0 10px;">Notificar para revisão</h3>
-        <p style="margin:0 0 12px;font-size:0.95em;">Envia um email a um membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} com o link para o parecer no SIGARRA.</p>
+        <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
         <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
           <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
           <div class="row" style="align-items:center;gap:10px;max-width:420px;">
