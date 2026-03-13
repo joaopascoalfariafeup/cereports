@@ -1445,6 +1445,16 @@ def home():
 @app.get("/login")
 def login():
     csrf = _get_csrf_token()
+    _btn_style = "display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;"
+    _alt_btns = []
+    if _ms_config()["client_id"]:
+        _alt_btns.append(f'<a href="{url_for("login_microsoft")}" class="btn-secondary" style="{_btn_style}">Login com conta Microsoft UP</a>')
+    if _oidc_config()["client_id"]:
+        _alt_btns.append(f'<a href="{url_for("login_oidc")}" class="btn-secondary" style="{_btn_style}">Autenticação federada UP</a>')
+    _alt_logins_html = (
+        '<hr style="margin:18px 0;">'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">' + "".join(_alt_btns) + "</div>"
+    ) if _alt_btns else ""
     body = f"""
     <div class="card">
       <form id="login-form" method="post" action="{url_for('login_post')}">
@@ -1461,10 +1471,9 @@ def login():
           <button id="btn-login" type="submit">Autenticar</button>
         </div>
       </form>
+      {_alt_logins_html}
       {'<p style="margin:14px 0 0;font-size:0.9em;">Ou <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
       <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
-      {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;"><a href="' + url_for("login_microsoft") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Login com conta Microsoft UP</a></p>' if _ms_config()["client_id"] else ''}
-      {'<p style="margin:8px 0 0;"><a href="' + url_for("login_oidc") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Autenticação federada UP</a></p>' if _oidc_config()["client_id"] else ''}
     </div>
     """
     return _page("Login no SIGARRA", body)
