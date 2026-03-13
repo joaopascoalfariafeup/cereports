@@ -1448,7 +1448,7 @@ def login():
     csrf = _get_csrf_token()
     _alt_links = []
     if _oidc_config()["client_id"]:
-        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada UP</a> (não permite submeter no SIGARRA por agora)')
+        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada UP</a> (permite gerar parecer mas não submeter no SIGARRA por agora)')
     _alt_logins_html = "".join(
         f'<p style="margin:10px 0 0;font-size:0.9em;">{l}</p>' for l in _alt_links
     )
