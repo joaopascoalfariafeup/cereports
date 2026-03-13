@@ -1452,9 +1452,11 @@ def login():
         _alt_btns.append(f'<a href="{url_for("login_microsoft")}" class="btn-secondary" style="{_btn_style}">Login com conta Microsoft UP</a>')
     if _oidc_config()["client_id"]:
         _alt_btns.append(f'<a href="{url_for("login_oidc")}" class="btn-secondary" style="{_btn_style}">Autenticação federada UP</a>')
+    _nota_alt = '<p class="muted" style="margin:6px 0 0;font-size:0.85em;">Estes métodos permitem gerar pareceres mas não submeter diretamente no SIGARRA (requer login com password).</p>' if _alt_btns else ""
     _alt_logins_html = (
         '<hr style="margin:18px 0;">'
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">' + "".join(_alt_btns) + "</div>"
+        + _nota_alt
     ) if _alt_btns else ""
     body = f"""
     <div class="card">
@@ -1473,7 +1475,7 @@ def login():
         </div>
       </form>
       {_alt_logins_html}
-      {'<p style="margin:14px 0 0;font-size:0.9em;">Ou <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
+      {'<p style="margin:14px 0 0;font-size:0.9em;">Ou <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _otp_ativo() else ''}
       <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
     </div>
     """
@@ -2063,6 +2065,10 @@ def _resend_api_key() -> str:
     return (os.environ.get("RESEND_API_KEY") or "").strip()
 
 
+def _otp_ativo() -> bool:
+    return bool(_resend_api_key()) and os.environ.get("ENABLE_EMAIL_OTP", "1").strip() == "1"
+
+
 def _encaminhamento_ativo() -> bool:
     return bool(_resend_api_key()) and os.environ.get("ENABLE_REVIEW_FORWARDING", "0").strip() == "1"
 
@@ -2120,7 +2126,7 @@ def _send_otp_email(to_email: str, otp: str) -> None:
 
 @app.get("/login/email")
 def login_email():
-    if not _resend_api_key():
+    if not _otp_ativo():
         abort(404)
     csrf = _get_csrf_token()
     return _page("Acesso por email institucional", f"""
@@ -2144,7 +2150,7 @@ def login_email():
 @app.post("/login/email")
 @_limiter.limit("5 per minute; 20 per hour")
 def login_email_post():
-    if not _resend_api_key():
+    if not _otp_ativo():
         abort(404)
     _require_csrf()
     email = (request.form.get("email") or "").strip().lower()
@@ -2197,7 +2203,7 @@ def login_email_post():
 @app.post("/login/email/verificar")
 @_limiter.limit("10 per minute")
 def login_email_verificar():
-    if not _resend_api_key():
+    if not _otp_ativo():
         abort(404)
     _require_csrf()
     email = (request.form.get("email") or "").strip().lower()
