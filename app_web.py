@@ -2549,9 +2549,10 @@ def preview(job_id: str):
       </div>
     </form>
     <script>
-    (function() {{
+    document.addEventListener('DOMContentLoaded', function() {{
       var ta = document.getElementById('field_parecer');
       var counter = document.getElementById('counter-parecer');
+      if (!ta || !counter) return;
       var btnSub = document.getElementById('btn-submeter');
       function update() {{
         var len = ta.value.length;
@@ -2561,7 +2562,7 @@ def preview(job_id: str):
       }}
       ta.addEventListener('input', update);
       update();
-    }})();
+    }});
     </script>
     """
 
