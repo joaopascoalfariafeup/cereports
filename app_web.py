@@ -1668,71 +1668,18 @@ def login_oidc_callback():
           <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
         </div>""")
 
-    # Decodificar claims dos tokens JWT para debug (sem verificação de assinatura)
-    def _jwt_claims(tok: str) -> dict:
-        try:
-            parts = tok.split(".")
-            if len(parts) < 2:
-                return {}
-            padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
-            return json.loads(base64.urlsafe_b64decode(padded))
-        except Exception:
-            return {}
-
-    _at_claims = _jwt_claims(token_data.get("access_token", ""))
-    _it_claims = _jwt_claims(token_data.get("id_token", ""))
-    _claims_summary = (
-        f"access_token claims: aud={_at_claims.get('aud')} azp={_at_claims.get('azp')} "
-        f"scope={_at_claims.get('scope')} iss={_at_claims.get('iss')} | "
-        f"id_token claims: aud={_it_claims.get('aud')} azp={_it_claims.get('azp')} "
-        f"scope={_it_claims.get('scope')}"
-    )
-    app.logger.info("login_oidc_callback: token claims — %s", _claims_summary)
-
-    # Tentar token exchange (RFC 8693) para obter access_token com aud=sigarra
-    # O access_token original tem aud=None; o SIGARRA precisa de ver-se no aud.
-    _EXCHANGE_AUDIENCES = ["sigarra", "https://sigarra.up.pt", "feup"]
-    _exchanged_token = ""
-    for _aud_candidate in _EXCHANGE_AUDIENCES:
-        try:
-            _xpayload = urllib.parse.urlencode({
-                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-                "subject_token": token_data.get("access_token", ""),
-                "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
-                "audience": _aud_candidate,
-                "client_id": cfg["client_id"],
-                "client_secret": cfg["client_secret"],
-            }).encode()
-            _xreq = _urllib_req.Request(
-                cfg["token_endpoint"],
-                data=_xpayload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            with _urllib_req.urlopen(_xreq, timeout=15) as _xresp:
-                _xdata = json.loads(_xresp.read().decode())
-            _xtok = _xdata.get("access_token", "")
-            _xaud = _jwt_claims(_xtok).get("aud")
-            app.logger.info("login_oidc_callback: token exchange audience=%s → aud=%s", _aud_candidate, _xaud)
-            if _xtok:
-                _exchanged_token = _xtok
-                break
-        except Exception as _xe:
-            app.logger.info("login_oidc_callback: token exchange audience=%s falhou: %s", _aud_candidate, _xe)
-
-    # Tentar obter sessão SIGARRA real via troca de token OIDC
-    # A função tenta múltiplas estratégias (URLs, métodos, tokens)
+    # Tentar obter sessão SIGARRA real via GET Bearer access_token
+    # Pendente: UPdigital adicionar Audience Mapper ao cliente cereports
     user_sess = None
     flask_session.pop("oidc_sess_debug", None)
-    _at = _exchanged_token or token_data.get("access_token", "")
-    _it = token_data.get("id_token", "")
+    _at = token_data.get("access_token", "")
     try:
-        user_sess = SigarraSession.from_oidc_token(_at, codigo, id_token=_it)
+        user_sess = SigarraSession.from_oidc_token(_at, codigo)
         flask_session["oidc_sess_debug"] = "ok"
         app.logger.info("login_oidc_callback: sessão SIGARRA obtida para %s", codigo)
     except Exception as e:
         app.logger.warning("login_oidc_callback: %s", e)
-        flask_session["oidc_sess_debug"] = f"{_claims_summary} | {e}"
+        flask_session["oidc_sess_debug"] = str(e)
 
     # Fallback: clonar sessão do servidor
     if user_sess is None:

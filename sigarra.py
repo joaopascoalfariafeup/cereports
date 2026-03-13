@@ -207,96 +207,51 @@ class SigarraSession:
         return dados
 
     @classmethod
-    def from_oidc_token(cls, access_token: str, codigo: str,
-                        id_token: str = "") -> "SigarraSession":
-        """Tenta várias estratégias para trocar token OIDC por sessão SIGARRA.
+    def from_oidc_token(cls, access_token: str, codigo: str) -> "SigarraSession":
+        """Troca access_token OIDC por sessão SIGARRA via GET Bearer.
 
-        Tenta múltiplas combinações de URL, método HTTP e formato de envio do
-        token.  Devolve a sessão na primeira que resultar (Set-Cookie com
-        cookies).  Se nenhuma funcionar, levanta RuntimeError com o resumo
-        de todas as tentativas (útil para debug).
+        Endpoint: https://sigarra.up.pt/auth/oidc/token
+        Requer que o access_token tenha o campo ``aud`` com o identificador
+        do serviço SIGARRA (configuração do Audience Mapper no Keycloak UP).
 
         Raises:
-            RuntimeError: nenhuma estratégia resultou (mensagem com detalhes).
+            PermissionError: token inválido (HTTP 403) ou sem cookies.
+            RuntimeError: erro HTTP (ex: 500 se aud em falta no token).
             ConnectionError: erro de rede.
         """
-        _URLS = [
-            "https://sigarra.up.pt/auth/oidc/token",
-            "https://sigarra.up.pt/feup/pt/auth/oidc/token",
-        ]
-
-        def _make_sess():
-            s = cls.__new__(cls)
-            s._cookie_jar = http.cookiejar.CookieJar()
-            s._opener = urllib.request.build_opener(
-                urllib.request.HTTPCookieProcessor(s._cookie_jar)
-            )
-            s._lock = threading.Lock()
-            s._autenticado = False
-            s._codigo_pessoal = codigo
-            s._http_retries = 2
-            s._http_backoff_base = 0.7
-            return s
-
-        # Montar lista de tentativas: (label, url, Request)
-        strategies: list[tuple[str, urllib.request.Request]] = []
-        for token_label, token_val in [("access_token", access_token),
-                                        ("id_token", id_token)]:
-            if not token_val:
-                continue
-            for url in _URLS:
-                # GET com Authorization: Bearer
-                strategies.append((
-                    f"GET Bearer {token_label} → {url}",
-                    urllib.request.Request(url, headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Authorization": f"Bearer {token_val}",
-                    }),
-                ))
-                # POST com token no body (form-encoded)
-                for field in ("token", "access_token"):
-                    body_bytes = urllib.parse.urlencode(
-                        {field: token_val}
-                    ).encode()
-                    req = urllib.request.Request(
-                        url, data=body_bytes, headers={
-                            "User-Agent": "Mozilla/5.0",
-                            "Content-Type": "application/x-www-form-urlencoded",
-                        },
-                    )
-                    strategies.append((
-                        f"POST {field}={token_label} → {url}",
-                        req,
-                    ))
-
-        results: list[str] = []
-        for label, req in strategies:
-            sess = _make_sess()
-            try:
-                with sess._lock:
-                    sess._opener.open(req, timeout=15)
-                cookies = list(sess._cookie_jar)
-                if cookies:
-                    sess._autenticado = True
-                    results.append(f"{label}: OK ({len(cookies)} cookies)")
-                    return sess
-                results.append(f"{label}: 200 mas sem cookies")
-            except urllib.error.HTTPError as e:
-                try:
-                    body = e.read().decode("utf-8", errors="replace")[:200]
-                except Exception:
-                    body = ""
-                results.append(f"{label}: HTTP {e.code}"
-                               + (f" ({body[:80]})" if body else ""))
-            except urllib.error.URLError as e:
-                results.append(f"{label}: URLError {e}")
-            except Exception as e:
-                results.append(f"{label}: {type(e).__name__} {e}")
-
-        raise RuntimeError(
-            "Nenhuma estratégia OIDC→SIGARRA resultou:\n"
-            + "\n".join(f"  • {r}" for r in results)
+        sess = cls.__new__(cls)
+        sess._cookie_jar = http.cookiejar.CookieJar()
+        sess._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(sess._cookie_jar)
         )
+        sess._lock = threading.Lock()
+        sess._autenticado = False
+        sess._codigo_pessoal = codigo
+        sess._http_retries = 2
+        sess._http_backoff_base = 0.7
+
+        url = "https://sigarra.up.pt/auth/oidc/token"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0",
+            "Authorization": f"Bearer {access_token}",
+        })
+        try:
+            with sess._lock:
+                sess._opener.open(req, timeout=15)
+            if not list(sess._cookie_jar):
+                raise PermissionError("SIGARRA não devolveu cookies de sessão para o token OIDC")
+            sess._autenticado = True
+            return sess
+        except urllib.error.HTTPError as e:
+            try:
+                body = e.read().decode("utf-8", errors="replace")[:300]
+            except Exception:
+                body = ""
+            if e.code == 403:
+                raise PermissionError(f"Token OIDC rejeitado (HTTP 403){': ' + body if body else ''}") from e
+            raise RuntimeError(f"Erro HTTP {e.code} ao trocar token OIDC{': ' + body if body else ''}") from e
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Erro de rede ao contactar endpoint OIDC SIGARRA: {e}") from e
 
     def clone_para_utilizador(self, codigo: str) -> "SigarraSession":
         """Cria uma SigarraSession com os cookies desta sessão mas para um utilizador diferente.
