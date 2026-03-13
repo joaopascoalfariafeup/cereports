@@ -88,9 +88,6 @@ _SERVER_SESS_LOCK = threading.Lock()
 _OIDC_STATES: dict[str, float] = {}
 _OIDC_STATES_LOCK = threading.Lock()
 
-# OTPs de email em curso: email → {otp, codigo, expires}
-_OTPS: dict[str, dict] = {}
-_OTPS_LOCK = threading.Lock()
 
 _PERSPETIVA_LABELS_WEB = {
     "CC": "Conselho Científico (CC)",
@@ -1244,8 +1241,7 @@ def login():
         </div>
       </form>
       {_alt_logins_html}
-      {'<p style="margin:14px 0 0;font-size:0.9em;">Ou <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _otp_ativo() else ''}
-      <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
+<p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
     </div>
     """
     return _page("Login no SIGARRA", body)
@@ -1291,7 +1287,7 @@ def privacidade():
 
       <h4>Autenticação e comunicação segura</h4>
       <p>
-        A aplicação suporta três métodos de autenticação, todos protegidos por HTTPS/TLS:
+        A aplicação suporta dois métodos de autenticação, todos protegidos por HTTPS/TLS:
       </p>
       <ul>
         <li>
@@ -1303,17 +1299,7 @@ def privacidade():
           <b>Autenticação federada UP (Keycloak/SAML):</b> o utilizador autentica-se através do
           sistema de identidade federada da Universidade do Porto (open-id.up.pt), sem que as
           credenciais sejam transmitidas a esta aplicação. A sessão SIGARRA é estabelecida através
-          de uma conta de servidor com acesso alargado à consulta de relatórios de ciclos de estudos,
-          sendo o código do utilizador registado nos metadados de auditoria.
-        </li>
-        <li>
-          <b>Acesso por código OTP via email institucional (upNNNNNN@up.pt):</b> o utilizador recebe
-          um código temporário de uso único por email (válido 10 minutos), enviado através do serviço
-          <a href="https://resend.com" target="_blank" rel="noopener">Resend</a>.
-          O endereço de email não é guardado em disco após a verificação do código.
-          A sessão SIGARRA é estabelecida através de uma conta de servidor com acesso alargado
-          à consulta de relatórios de ciclos de estudos, sendo o código do utilizador registado
-          nos metadados de auditoria.
+          de uma conta de servidor com acesso aos relatórios de ciclos de estudos.
         </li>
       </ul>
 
@@ -1766,182 +1752,15 @@ def login_oidc_callback():
 
 
 # ---------------------------------------------------------------------------
-# Autenticação por email OTP (via Resend; ativo se RESEND_API_KEY configurado)
+# Notificações por email via Resend
 # ---------------------------------------------------------------------------
 
 def _resend_api_key() -> str:
     return (os.environ.get("RESEND_API_KEY") or "").strip()
 
 
-def _otp_ativo() -> bool:
-    return bool(_resend_api_key()) and os.environ.get("ENABLE_EMAIL_OTP", "1").strip() == "1"
-
-
-
-
 def _resend_from() -> str:
     return (os.environ.get("RESEND_FROM") or "noreply@ce.uc-reports.com").strip()
-
-
-def _codigo_de_email_otp(email: str) -> Optional[str]:
-    """Extrai código SIGARRA de emails UP: upNNNNNN@up.pt ou upNNNNNN@*.up.pt."""
-    m = re.match(r"^up(\d{6,9})@(?:[\w-]+\.)*up\.pt$", email.strip().lower())
-    return m.group(1) if m else None
-
-
-def _purge_expired_otps() -> None:
-    now = time.time()
-    with _OTPS_LOCK:
-        expired = [k for k, v in _OTPS.items() if v["expires"] < now]
-        for k in expired:
-            del _OTPS[k]
-
-
-def _send_otp_email(to_email: str, otp: str) -> None:
-    """Envia OTP via Resend API."""
-    payload = json.dumps({
-        "from":    _resend_from(),
-        "to":      [to_email],
-        "subject": "Código de acesso — Pareceres CE FEUP",
-        "html":    (
-            f"<p>O seu código de acesso temporário é:</p>"
-            f"<p style='font-size:2em;letter-spacing:0.2em;font-weight:bold'>{otp}</p>"
-            f"<p>Válido por 10 minutos. Não partilhe este código.</p>"
-        ),
-    }).encode()
-    req = _urllib_req.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {_resend_api_key()}",
-            "Content-Type":  "application/json",
-            "User-Agent":    "CEReports/1.0",
-        },
-        method="POST",
-    )
-    try:
-        with _urllib_req.urlopen(req, timeout=15) as resp:
-            if resp.status not in (200, 201):
-                body = resp.read().decode("utf-8", errors="replace")[:300]
-                raise RuntimeError(f"Resend HTTP {resp.status}: {body}")
-    except _urllib_req.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:300]
-        raise RuntimeError(f"Resend HTTP {e.code}: {body}") from e
-
-
-@app.get("/login/email")
-def login_email():
-    if not _otp_ativo():
-        abort(404)
-    csrf = _get_csrf_token()
-    return _page("Acesso por email institucional", f"""
-    <div class="card">
-      <p>Introduza o seu email UP (ex: upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt).</p>
-      <form method="post" action="{url_for('login_email_post')}">
-        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-        <div class="row" style="align-items:center; gap:10px; max-width:400px;">
-          <label style="width:60px; min-width:60px;">Email:</label>
-          <input name="email" type="email" autocomplete="email"
-                 placeholder="upNNNNNN@up.pt" required style="width:240px;">
-        </div>
-        <div class="row" style="margin-top:14px;">
-          <button type="submit">Enviar código</button>
-        </div>
-      </form>
-      <p style="margin-top:16px;"><a href="{url_for('login')}">&#8592; Voltar ao login SIGARRA</a></p>
-    </div>""")
-
-
-@app.post("/login/email")
-@_limiter.limit("5 per minute; 20 per hour")
-def login_email_post():
-    if not _otp_ativo():
-        abort(404)
-    _require_csrf()
-    email = (request.form.get("email") or "").strip().lower()
-    codigo = _codigo_de_email_otp(email)
-    if not codigo:
-        return _page("Acesso por email", f"""
-        <div class="card">
-          <p><b>Email não reconhecido.</b> Use um email UP no formato upNNNNNN@up.pt ou upNNNNNN@edu.fe.up.pt.</p>
-          <p><a href="{url_for('login_email')}">Tentar novamente</a></p>
-        </div>""")
-
-    otp = "{:06d}".format(secrets.randbelow(1_000_000))
-    _purge_expired_otps()
-    with _OTPS_LOCK:
-        _OTPS[email] = {"otp": otp, "codigo": codigo, "expires": time.time() + 600}
-
-    try:
-        _send_otp_email(email, otp)
-    except Exception as e:
-        app.logger.warning("login_email_post: erro ao enviar OTP para %s: %s", email, e)
-        return _page("Acesso por email", f"""
-        <div class="card">
-          <p><b>Erro ao enviar email:</b></p>
-          <p><code style="font-size:0.85em;word-break:break-all;">{_esc(str(e))}</code></p>
-          <p><a href="{url_for('login_email')}">Tentar novamente</a> &nbsp;|&nbsp; <a href="{url_for('login')}">Login SIGARRA</a></p>
-        </div>""")
-
-    csrf = _get_csrf_token()
-    return _page("Acesso por email institucional", f"""
-    <div class="card">
-      <p>Enviámos um código de 6 dígitos para {_esc(email)}.<br>
-         Válido por 10 minutos.</p>
-      <form method="post" action="{url_for('login_email_verificar')}">
-        <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-        <input type="hidden" name="email" value="{_esc(email)}">
-        <div class="row" style="align-items:center; gap:10px; max-width:360px;">
-          <label style="white-space:nowrap;">Introduza o código recebido:</label>
-          <input name="otp" type="text" inputmode="numeric" pattern="[0-9]{{6}}"
-                 maxlength="6" autocomplete="one-time-code"
-                 placeholder="000000" required style="width:120px; font-size:1.3em; letter-spacing:0.15em;">
-        </div>
-        <div class="row" style="margin-top:14px;">
-          <button type="submit">Verificar</button>
-        </div>
-      </form>
-      <p style="margin-top:16px;"><a href="{url_for('login_email')}">Pedir novo código</a></p>
-    </div>""")
-
-
-@app.post("/login/email/verificar")
-@_limiter.limit("10 per minute")
-def login_email_verificar():
-    if not _otp_ativo():
-        abort(404)
-    _require_csrf()
-    email = (request.form.get("email") or "").strip().lower()
-    otp   = (request.form.get("otp")   or "").strip()
-
-    _purge_expired_otps()
-    with _OTPS_LOCK:
-        entry = _OTPS.get(email)
-        if not entry or entry["otp"] != otp or entry["expires"] < time.time():
-            return _page("Acesso por email", f"""
-            <div class="card">
-              <p><b>Código inválido ou expirado.</b></p>
-              <p><a href="{url_for('login_email')}">Pedir novo código</a></p>
-            </div>""")
-        codigo = entry["codigo"]
-        del _OTPS[email]   # single-use
-
-    try:
-        server_sess = _get_server_session()
-        user_sess = server_sess.clone_para_utilizador(codigo)
-    except Exception as e:
-        app.logger.warning("login_email_verificar: erro ao criar sessão para %s: %s", email, e)
-        return _page("Acesso por email", f"""
-        <div class="card">
-          <p><b>Erro ao criar sessão:</b></p>
-          <p><code style="font-size:0.85em;word-break:break-all;">{_esc(str(e))}</code></p>
-          <p><a href="{url_for('login')}">Login SIGARRA</a></p>
-        </div>""")
-
-    _set_sigarra_session(user_sess)
-    flask_session["sigarra_login"] = email
-    flask_session["login_method"] = "otp"
-    return redirect(url_for("ces"))
 
 
 # ---------------------------------------------------------------------------
@@ -2906,7 +2725,7 @@ def notificar_post(job_id: str):
 
     # Enviar email
     resend_key = _resend_api_key()
-    _from = os.environ.get("RESEND_FROM", "noreply@ce.uc-reports.com")
+    _from = _resend_from()
     assunto = f"Parecer {_orgao_label} — {job.ce_nome} {job.ano_letivo} — notificação para revisão"
     corpo = (
         f"{emissor_nome} submeteu o parecer {_orgao_artigo} {_orgao_label} relativo ao ciclo de estudos "
