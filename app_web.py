@@ -2799,8 +2799,8 @@ def preview(job_id: str):
         <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           {_btn_submeter}
           <button type="submit" name="action" value="download_txt"
-                  style="background:none;border:none;padding:0;color:var(--muted);cursor:pointer;font-size:inherit;text-decoration:underline;">Guardar texto</button>
-          <a style="color:var(--muted);" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+                  style="background:none;border:none;padding:0;color:var(--muted);cursor:pointer;font-size:inherit;">Guardar texto</button>
+          <a style="color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
     </form>
@@ -2854,13 +2854,13 @@ def download_parecer(job_id: str):
             return _page("Erro na submissão", f"""
             <div class="card">
               <p class="status-err">Sem permissão para submeter no SIGARRA: {_esc(str(e))}</p>
-              <p><a href="{url_for('resultado', job_id=job_id)}">Voltar ao parecer</a></p>
+              <p><a href="{url_for('preview', job_id=job_id)}">Voltar ao parecer</a></p>
             </div>"""), 403
         except Exception as e:
             return _page("Erro na submissão", f"""
             <div class="card">
               <p class="status-err">Erro ao submeter no SIGARRA: {_esc(str(e))}</p>
-              <p><a href="{url_for('resultado', job_id=job_id)}">Voltar ao parecer</a></p>
+              <p><a href="{url_for('preview', job_id=job_id)}">Voltar ao parecer</a></p>
             </div>"""), 500
         flask_session[f"submitted_{job_id}"] = True
         return redirect(url_for("submissao_get", job_id=job_id))
