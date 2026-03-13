@@ -371,6 +371,31 @@ class SigarraSession:
         except urllib.error.URLError as e:
             raise ConnectionError(f"Erro de rede/timeout ao aceder a {url}: {e}") from e
 
+    def post_form(self, url: str, data: dict, timeout: int = 30) -> str:
+        """Faz POST de um formulário para o SIGARRA (com cookies de sessão)."""
+        encoded = urllib.parse.urlencode(data).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=encoded,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+        try:
+            with self._lock:
+                resp = self._opener.open(req, timeout=timeout)
+            charset = resp.headers.get_content_charset() or "iso-8859-15"
+            return resp.read().decode(charset, errors="replace")
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                raise PermissionError("Sessão expirada (HTTP 401)") from e
+            if e.code == 403:
+                raise PermissionError("Sem permissão para submeter (HTTP 403)") from e
+            raise RuntimeError(f"Erro HTTP {e.code} ao fazer POST para {url}") from e
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Erro de rede ao fazer POST para {url}: {e}") from e
+
     @staticmethod
     def _is_retryable_http(code: int) -> bool:
         return code in {408, 429, 500, 502, 503, 504}

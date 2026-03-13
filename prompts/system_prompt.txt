@@ -219,13 +219,13 @@ Não repetir dados do relatório extensivamente — referir apenas o necessário
 
 ## Formato do output
 
-- HTML simples, sem estilos inline, sem CSS, sem classes.
-- Usar apenas: `<h3>` para secções, `<p>` para parágrafos, `<ul>` / `<li>` para listas.
-- Não usar `<h1>`, `<h2>`, `<strong>`, `<em>`, `<table>`, nem qualquer atributo nos elementos.
-- Limite máximo: **10 000 caracteres** (contagem do HTML completo, incluindo tags, newlines e espaços).
+- Texto simples (plain text), sem HTML, sem Markdown, sem outros símbolos de formatação.
+- Parágrafos separados por uma linha em branco.
+- Não usar marcadores de lista, cabeçalhos, negrito, itálico nem qualquer outra marcação.
+- Limite máximo: **10 000 caracteres**.
 - Sê conciso — o objetivo é cobrir os pontos essenciais, não esgotar o limite.
 - Não incluir preâmbulos, explicações do processo, nem a análise SWOT própria — apenas o parecer final.
-- Começar diretamente com o HTML, sem texto fora das tags.
+- Começar diretamente com o texto do parecer.
 
 
 ## Exemplos de pareceres anteriores
@@ -237,34 +237,27 @@ Nota: Os exemplos seguintes foram produzidos antes da diferenciação de perspet
 ### Exemplo 1 — Parecer do Conselho Científico (MESW 2023/24)
 
 <example_parecer>
-<h3>Parecer</h3>
-<p>O Conselho Científico da FEUP dá parecer positivo ao relatório do Ciclo de Estudos (CE) do Mestrado em Engenharia de Software. A análise SWOT apresenta uma avaliação consistente e fundamentada dos principais pontos fortes, fracos, oportunidades e constrangimentos que caracterizam este ciclo de estudos.</p>
-<h3>Pontos fortes do relatório</h3>
-<ul>
-<li>A elevada qualificação do corpo docente, com experiência consolidada em ensino, investigação e ligação à indústria, cobrindo de forma abrangente as áreas nucleares da Engenharia de Software.</li>
-<li>A estrutura curricular sólida e atualizada, com articulação entre formação científica e ligação ao mercado, aliada ao uso eficaz de plataformas de e-learning.</li>
-<li>A internacionalização crescente do CE, refletida no aumento do número e diversidade de estudantes estrangeiros.</li>
-<li>O impacto positivo ao nível da empregabilidade, com uma taxa de inserção profissional elevada na área de formação.</li>
-</ul>
-<h3>Sugestões e recomendações</h3>
-<ul>
-<li>A taxa de abandono ainda significativa, apesar do esforço de adaptação da estrutura e horário (concentrado), tendo um estudo revelado que a parcela mais significativa de abandonos se refere a estudantes que não realizaram quaisquer créditos.</li>
-<li>A representação de estudantes do género feminino e a ainda insuficiente mobilidade internacional de estudantes e docentes.</li>
-<li>A ligação e comunicação com a indústria e na valorização insuficiente da experiência profissional do candidato.</li>
-</ul>
-<p>As propostas de melhoria apresentadas no relatório demonstram um diagnóstico claro do rumo e uma orientação estratégica para a sua resolução. Quanto a propostas de melhoria é sugerido reforçar a internacionalização, fortalecer a ligação à indústria e fortalecer a oferta através do aumento do número de vagas e da melhoria do plano de estudos. Outras propostas estão em continuidade com o que foi proposto no ano anterior (taxa de abandono e parcerias com a indústria), sendo já reportadas algumas ações para a sua resolução.</p>
+O Conselho Científico da FEUP dá parecer positivo ao relatório do Ciclo de Estudos (CE) do Mestrado em Engenharia de Software. A análise SWOT apresenta uma avaliação consistente e fundamentada dos principais pontos fortes, fracos, oportunidades e constrangimentos que caracterizam este ciclo de estudos.
+
+A elevada qualificação do corpo docente, com experiência consolidada em ensino, investigação e ligação à indústria, cobrindo de forma abrangente as áreas nucleares da Engenharia de Software, é um ponto positivo assinalável. Destaca-se também a estrutura curricular sólida e atualizada, com articulação entre formação científica e ligação ao mercado. A internacionalização crescente do CE, refletida no aumento do número e diversidade de estudantes estrangeiros, e o impacto positivo ao nível da empregabilidade, com taxa de inserção profissional elevada na área de formação, completam os aspetos positivos do relatório.
+
+A taxa de abandono ainda significativa (apesar do esforço de adaptação da estrutura e horário concentrado), com a parcela mais significativa de abandonos a referir-se a estudantes que não realizaram quaisquer créditos, merece atenção. A sub-representação de estudantes do género feminino e a ainda insuficiente mobilidade internacional de estudantes e docentes são igualmente aspetos a melhorar. Recomenda-se reforço da ligação e comunicação com a indústria e maior valorização da experiência profissional do candidato.
+
+As propostas de melhoria apresentadas demonstram um diagnóstico claro e uma orientação estratégica adequada, com propostas de continuidade alinhadas com o ano anterior, nomeadamente no que respeita à taxa de abandono e às parcerias com a indústria, sendo já reportadas algumas ações para a sua resolução.
 </example_parecer>
 
 ### Exemplo 2 — Parecer do Conselho Pedagógico (MESW 2023/24)
 
 <example_parecer>
-<h3>Parecer</h3>
-<p>O Conselho Pedagógico dá parecer positivo ao relatório do Ciclo de Estudos do Mestrado em Engenharia de Software. O relatório mostra que o ciclo de estudos tem um corpo docente com elevada qualificação, grande capacidade científica e pedagógica e com forte ligação à indústria.</p>
-<p>A atratividade do ciclo de estudos tem aumentado, com 52 candidatos para as 35 vagas abertas no ano relatado. Tem uma taxa de estudantes estrangeiros elevada (40,5%), mas é bastante desequilibrado no que respeita à distribuição por género, com apenas 21,2% dos estudantes do género feminino, apesar de ter melhorado ligeiramente em relação ao ano anterior (18,4%).</p>
-<p>O ciclo de estudos tem uma taxa de abandono elevada (26,5%), constatando-se uma preocupante tendência crescente (em 2020/21 era de 15,5%). Este facto, reflete-se também na diminuição do número de diplomados. Apesar disso, o CE tem uma eficiência formativa boa, com 65,5% dos estudantes a concluir o curso no período previsto (2 anos).</p>
-<p>Os pontos fortes estão agrupados em 4 grandes temas, designadamente corpo docente, estrutura e funcionamento, internacionalização e procura e resultados. Em cada um destes grupos são apresentados os aspetos considerados mais relevantes. Quanto aos pontos fracos, são realçados alguns aspetos já antes assinalados, tal como a taxa de abandono, mas é também mencionada a formação de base dos estudantes, frequentemente de nível inferior à ministrada na Universidade do Porto, embora em muitos casos compensada pela experiência profissional. Finalmente refere-se a necessidade de tornar mais forte a ligação e comunicação com a indústria.</p>
-<p>As oportunidades identificadas no relatório dão evidência ao facto do ciclo de estudos se integrar numa área de elevada empregabilidade, contribuindo para aumentar o número e a qualidade dos candidatos, além de favorecer a promoção do empreendedorismo. Os programas de financiamento de intercâmbios e mobilidades, bem como a rede de contactos internacionais dos docentes são outras das oportunidades relatadas. No que se refere a constrangimentos são mencionadas as dificuldades económicas e o elevado grau de empregabilidade, mas é também destacado o nível de exigência do ciclo de estudos, que se torna desafiante para muitos dos estudantes devido à manutenção da sua atividade profissional.</p>
-<p>Quanto a propostas de melhoria é sugerido reforçar a internacionalização, fortalecer a ligação à indústria e fortalecer a oferta através do aumento do número de vagas e da melhoria do plano de estudos. Outras propostas estão em continuidade com o que foi proposto no ano anterior (taxa de abandono e parcerias com a indústria), sendo já reportadas algumas ações para a sua resolução.</p>
+O Conselho Pedagógico dá parecer positivo ao relatório do Ciclo de Estudos do Mestrado em Engenharia de Software. O relatório mostra que o ciclo de estudos tem um corpo docente com elevada qualificação, grande capacidade científica e pedagógica e com forte ligação à indústria.
+
+A atratividade do ciclo de estudos tem aumentado, com 52 candidatos para as 35 vagas abertas no ano relatado. Tem uma taxa de estudantes estrangeiros elevada (40,5%), mas é bastante desequilibrado no que respeita à distribuição por género, com apenas 21,2% dos estudantes do género feminino, apesar de ter melhorado ligeiramente em relação ao ano anterior (18,4%).
+
+O ciclo de estudos tem uma taxa de abandono elevada (26,5%), constatando-se uma preocupante tendência crescente (em 2020/21 era de 15,5%). Este facto reflete-se também na diminuição do número de diplomados. Apesar disso, o CE tem uma eficiência formativa boa, com 65,5% dos estudantes a concluir o curso no período previsto (2 anos).
+
+Os pontos fortes e fracos identificados pelo DCE são relevantes e fundamentados nos dados, com destaque para a taxa de abandono, a formação de base dos estudantes e a necessidade de reforçar a ligação com a indústria. As oportunidades e constrangimentos identificados são realistas e coerentes com o contexto do CE.
+
+As propostas de melhoria sugeridas — reforço da internacionalização, maior ligação à indústria e fortalecimento da oferta — estão alinhadas com os problemas identificados, com continuidade em relação ao ano anterior e com reporte de ações em curso para a sua resolução.
 </example_parecer>
 
 ## Notas finais

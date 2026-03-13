@@ -54,7 +54,7 @@ def analisar_ce(
     logger.iniciar_fase("llm", f"A gerar parecer ({provider} / {modelo})...")
     custo_pre = logger.total_custo_estimado() or 0.0
     try:
-        parecer_html = analisar_relatorio_ce(
+        parecer_texto = analisar_relatorio_ce(
             relatorio_html=relatorio_html,
             ce_nome=ce_nome,
             ano_letivo=ano_letivo,
@@ -72,8 +72,8 @@ def analisar_ce(
         logger.concluir_fase("llm", f"Falha ao gerar parecer: {e}", ok=False)
         raise
 
-    # Guardar HTML do parecer
-    (run_dir / "parecer.html").write_text(parecer_html, encoding="utf-8")
+    # Guardar texto do parecer
+    (run_dir / "parecer.txt").write_text(parecer_texto, encoding="utf-8")
 
     # Guardar user_prompt para auditoria (visível no ZIP)
     _PERSPETIVA_LABELS = {
@@ -111,7 +111,7 @@ def analisar_ce(
     preview_payload = {
         "ce_nome": ce_nome,
         "ano_letivo": ano_letivo,
-        "parecer_html": parecer_html,
+        "parecer_texto": parecer_texto,
         "provider": provider,
         "modelo": modelo,
     }

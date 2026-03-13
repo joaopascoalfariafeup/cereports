@@ -35,7 +35,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -1476,6 +1476,7 @@ def login_post():
 
     _set_sigarra_session(sess)
     flask_session["sigarra_login"] = login_val
+    flask_session["login_method"] = "password"
     return redirect(url_for("ces"))
 
 
@@ -1731,6 +1732,7 @@ def login_federado_relay():
             _FED_STATES.pop(token, None)
         _set_sigarra_session(sess)
         flask_session["sigarra_login"] = username_hint
+        flask_session["login_method"] = "password"
         return redirect(url_for("ces"))
 
     # Ainda no fluxo (ex: MFA, etc.)
@@ -1868,6 +1870,7 @@ def login_microsoft_callback():
     user_sess = server_sess.clone_para_utilizador(codigo)
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = email
+    flask_session["login_method"] = "microsoft"
     return redirect(url_for("ces"))
 
 
@@ -2045,6 +2048,7 @@ def login_email_verificar():
 
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = email
+    flask_session["login_method"] = "otp"
     return redirect(url_for("ces"))
 
 
@@ -2752,7 +2756,8 @@ def preview(job_id: str):
         return _page("Erro", "<div class='card'><p class='status-err'>Dados de preview não encontrados.</p></div>"), 500
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
 
-    parecer_html = payload.get("parecer_html", "")
+    # Suporta jobs antigos (parecer_html) e novos (parecer_texto)
+    parecer_texto = payload.get("parecer_texto") or payload.get("parecer_html", "")
     ce_nome = payload.get("ce_nome", job.ce_nome)
     ano_letivo = payload.get("ano_letivo", job.ano_letivo)
 
@@ -2772,51 +2777,61 @@ def preview(job_id: str):
         if _relatorio_url else ""
     )
 
+    # Botão de submissão: só com login por password e perspetiva CC/CP/CA
+    _pode_submeter = (
+        flask_session.get("login_method") == "password"
+        and (job.perspetiva or "").upper() in ("CC", "CP", "CA")
+        and bool(job.pv_id)
+    )
+    _btn_submeter = (
+        f'<button type="submit" name="action" value="submeter_sigarra" class="btn btn-primary"'
+        f' onclick="return confirm(\'Confirma a submissão do parecer no SIGARRA? Certifique-se de que guardou uma cópia antes.\');"'
+        f' id="btn-submeter">Submeter no SIGARRA</button>'
+        if _pode_submeter else ""
+    )
+
     body = f"""
     <div class="card">
       {_ce_titulo_html(ce_nome, ano_letivo)}
-      <div class="muted">Parecer gerado — reveja e utilize conforme necessário.</div>
+      <div class="muted">Parecer gerado — reveja e edite conforme necessário.</div>
       {(f'<p>{_link_relatorio}</p>') if _link_relatorio else ""}
     </div>
 
     <form method="post" action="{url_for('download_parecer', job_id=job_id)}" id="form-parecer">
       <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-      <input type="hidden" name="field_parecer" id="field_parecer" value="{_esc(parecer_html)}">
-
       <div class="card">
-        <div class="editable-header" data-editable-id="parecer">
-          <h3>Parecer</h3>
-          <div style="display:inline-flex; gap:8px; align-items:center;">
-            <span class="edit-counter" id="counter-parecer"></span>
-            <button type="button" class="btn-cancel-edit" id="cancel-parecer">Cancelar</button>
-            <button type="button" class="btn-edit" id="edit-parecer">Editar</button>
-          </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h3 style="margin:0;">Parecer</h3>
+          <span id="counter-parecer" style="font-size:0.85em; color:#888;"></span>
         </div>
-        <div class="edit-toolbar" id="toolbar-parecer">
-          <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
-          <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
-          <button type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
-          <span class="sep"></span>
-          <button type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button>
-          <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button>
-          <span class="sep"></span>
-          <button type="button" data-cmd="removeFormat" title="Limpar formatação">&#10005; Limpar</button>
-        </div>
-        <div class="preview-html" id="parecer-block" data-field="parecer">{parecer_html}</div>
+        <textarea name="field_parecer" id="field_parecer" rows="22"
+                  style="width:100%;box-sizing:border-box;font-family:inherit;font-size:0.96em;line-height:1.6;padding:10px;border:1px solid var(--line);border-radius:8px;resize:vertical;"
+                  >{_esc(parecer_texto)}</textarea>
       </div>
-
       <div class="card">
-        <div class="navbar">
-          <div class="navbar-left">
-            <button type="submit" class="btn" name="action" value="download_html">Guardar HTML</button>
-          </div>
-          <div class="navbar-right" style="gap:16px;">
-            {'<a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _encaminhamento_ativo() else ''}
-            <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
-          </div>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <button type="submit" class="btn" name="action" value="download_txt">Guardar texto</button>
+          {_btn_submeter}
+          {'<span style="color:#ccc;">|</span><a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _encaminhamento_ativo() else ''}
+          <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
     </form>
+    <script>
+    (function() {{
+      var ta = document.getElementById('field_parecer');
+      var counter = document.getElementById('counter-parecer');
+      var btnSub = document.getElementById('btn-submeter');
+      function update() {{
+        var len = ta.value.length;
+        counter.textContent = len + ' / 10000';
+        counter.style.color = len > 10000 ? '#c00' : '#888';
+        if (btnSub) btnSub.disabled = len > 10000;
+      }}
+      ta.addEventListener('input', update);
+      update();
+    }})();
+    </script>
     """
 
     return _page("Parecer", body, step=3)
@@ -2834,30 +2849,53 @@ def download_parecer(job_id: str):
         if not job or not _is_job_owner(job, sess):
             abort(403)
 
-    parecer_html = request.form.get("field_parecer", "").strip()
+    action = request.form.get("action", "download_txt")
+    parecer_texto = request.form.get("field_parecer", "").strip()
     ce_slug = re.sub(r"[^a-z0-9]+", "-", (job.ce_nome or "ce").lower()).strip("-")
-    filename = f"parecer_{ce_slug}_{job.ano_letivo or 'na'}.html".replace("/", "-")
 
-    html_doc = f"""<!doctype html>
-<html lang="pt">
-<head>
-  <meta charset="utf-8">
-  <title>Parecer — {html.escape(job.ce_nome)} — {html.escape(job.ano_letivo)}</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }}
-    h3 {{ color: #1a1a1a; }}
-    ul {{ margin: 8px 0 12px 20px; }}
-    li {{ margin: 4px 0; }}
-  </style>
-</head>
-<body>
-{parecer_html}
-</body>
-</html>"""
+    if action == "submeter_sigarra":
+        # Submissão direta ao SIGARRA
+        if flask_session.get("login_method") != "password":
+            return _page("Submissão não disponível", """
+            <div class="card">
+              <p class="status-err">A submissão direta ao SIGARRA requer autenticação por password SIGARRA.</p>
+              <p><a href="/login">Fazer login por password</a></p>
+            </div>"""), 403
+        try:
+            submeter_parecer_sigarra(sess, job.pv_id, job.perspetiva, parecer_texto)
+        except PermissionError as e:
+            return _page("Erro na submissão", f"""
+            <div class="card">
+              <p class="status-err">Sem permissão para submeter no SIGARRA: {_esc(str(e))}</p>
+              <p><a href="{url_for('resultado', job_id=job_id)}">Voltar ao parecer</a></p>
+            </div>"""), 403
+        except Exception as e:
+            return _page("Erro na submissão", f"""
+            <div class="card">
+              <p class="status-err">Erro ao submeter no SIGARRA: {_esc(str(e))}</p>
+              <p><a href="{url_for('resultado', job_id=job_id)}">Voltar ao parecer</a></p>
+            </div>"""), 500
+        _pv = job.pv_id or ""
+        if _pv.startswith("3c:"):
+            _url_rel = f"https://sigarra.up.pt/feup/pt/relcur_geral.rel3c_edit?pv_id={_pv[3:]}&pv_print_ver=S"
+        elif _pv:
+            _url_rel = f"https://sigarra.up.pt/feup/pt/relcur_geral.proc_edit?pv_id={_pv}&pv_print_ver=S"
+        else:
+            _url_rel = ""
+        _link_ver = f'<p><a href="{_url_rel}" target="_blank" rel="noopener">Ver parecer no SIGARRA</a></p>' if _url_rel else ""
+        return _page("Parecer submetido", f"""
+        <div class="card">
+          {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+          <p class="status-ok">Parecer submetido com sucesso no SIGARRA.</p>
+          {_link_ver}
+          <p><a href="{url_for('ces')}">Voltar ao início</a></p>
+        </div>""")
 
+    # Download como ficheiro de texto
+    filename = f"parecer_{ce_slug}_{job.ano_letivo or 'na'}.txt".replace("/", "-")
     return Response(
-        html_doc,
-        mimetype="text/html; charset=utf-8",
+        parecer_texto,
+        mimetype="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -3049,7 +3087,10 @@ def revisao_get(token: str):
         </div>"""), 403
 
     run_dir = Path(review["run_dir"])
-    parecer_path = run_dir / "parecer.html"
+    # Suporta novos (parecer.txt) e antigos (parecer.html)
+    parecer_path = run_dir / "parecer.txt"
+    if not parecer_path.exists():
+        parecer_path = run_dir / "parecer.html"
     if not parecer_path.exists():
         return _page("Erro", "<div class='card'><p class='status-err'>O ficheiro de parecer não foi encontrado. O conteúdo pode ter expirado.</p></div>"), 404
 
@@ -3082,42 +3123,26 @@ def revisao_get(token: str):
 
     <form method="post" action="{url_for('revisao_download', token=token)}" id="form-revisao">
       <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-      <input type="hidden" name="field_parecer" id="field_parecer_rev" value="{_esc(parecer_html)}">
-
       <div class="card">
-        <div class="editable-header" data-editable-id="parecer-rev">
-          <h3>Parecer</h3>
-          <div style="display:inline-flex; gap:8px; align-items:center;">
-            <span class="edit-counter" id="counter-parecer-rev"></span>
-            <button type="button" class="btn-cancel-edit" id="cancel-parecer-rev">Cancelar</button>
-            <button type="button" class="btn-edit" id="edit-parecer-rev">Editar</button>
-          </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h3 style="margin:0;">Parecer</h3>
+          <span id="counter-rev" style="font-size:0.85em; color:#888;"></span>
         </div>
-        <div class="edit-toolbar" id="toolbar-parecer-rev">
-          <button type="button" data-cmd="bold" title="Negrito"><b>B</b></button>
-          <button type="button" data-cmd="italic" title="Itálico"><i>I</i></button>
-          <button type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
-          <span class="sep"></span>
-          <button type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button>
-          <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button>
-          <span class="sep"></span>
-          <button type="button" data-cmd="removeFormat" title="Limpar formatação">&#10005; Limpar</button>
-        </div>
-        <div class="preview-html" id="parecer-rev-block" data-field="parecer-rev">{parecer_html}</div>
+        <textarea name="field_parecer" id="field_parecer_rev" rows="22"
+                  style="width:100%;box-sizing:border-box;font-family:inherit;font-size:0.96em;line-height:1.6;padding:10px;border:1px solid var(--line);border-radius:8px;resize:vertical;"
+                  >{_esc(parecer_html)}</textarea>
       </div>
-
       <div class="card">
         <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <button type="submit" class="btn" name="action" value="download_html"
-                  onclick="window._rev_baixado=true;">Guardar HTML</button>
-          <span style="color:#ccc;">|</span>
-          {'<a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Reencaminhar</a><span style="color:#ccc;">|</span>' if _encaminhamento_ativo() else ''}
+          <button type="submit" class="btn" name="action" value="download_txt"
+                  onclick="window._rev_baixado=true;">Guardar texto</button>
+          {'<span style="color:#ccc;">|</span><a href="' + url_for("encaminhar_revisao_get", token=token) + '" class="btn btn-secondary">Reencaminhar</a>' if _encaminhamento_ativo() else ''}
         </div>
       </div>
     </form>
 
     <form method="post" action="{url_for('revisao_concluir', token=token)}"
-          onsubmit="if(window._rev_editado && !window._rev_baixado){{ return confirm('Efetuou alterações mas ainda não guardou o HTML. Pretende mesmo assim concluir?'); }} return true;">
+          onsubmit="if(window._rev_editado && !window._rev_baixado){{ return confirm('Efetuou alterações mas ainda não guardou o texto. Pretende mesmo assim concluir?'); }} return true;">
       <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
       <div class="card">
         <button type="submit" class="btn">Concluir revisão</button>
@@ -3126,10 +3151,15 @@ def revisao_get(token: str):
 
     <script>
     (function() {{
-      var bloco = document.getElementById('parecer-rev-block');
-      if (bloco) {{
-        bloco.addEventListener('input', function() {{ window._rev_editado = true; window._rev_baixado = false; }});
+      var ta = document.getElementById('field_parecer_rev');
+      var counter = document.getElementById('counter-rev');
+      function update() {{
+        var len = ta.value.length;
+        counter.textContent = len + ' / 10000';
+        counter.style.color = len > 10000 ? '#c00' : '#888';
       }}
+      ta.addEventListener('input', function() {{ window._rev_editado = true; window._rev_baixado = false; update(); }});
+      update();
     }})();
     </script>
     """
@@ -3151,32 +3181,15 @@ def revisao_download(token: str):
     if eff_code != review["reviewer_code"] and eff_code not in _admin_codes():
         abort(403)
 
-    parecer_html = request.form.get("field_parecer", "").strip()
+    parecer_texto = request.form.get("field_parecer", "").strip()
     ce_nome = review.get("ce_nome", "ce")
     ano_letivo = review.get("ano_letivo", "na")
     ce_slug = re.sub(r"[^a-z0-9]+", "-", ce_nome.lower()).strip("-")
-    filename = f"parecer_{ce_slug}_{ano_letivo}.html".replace("/", "-")
-
-    html_doc = f"""<!doctype html>
-<html lang="pt">
-<head>
-  <meta charset="utf-8">
-  <title>Parecer — {html.escape(ce_nome)} — {html.escape(ano_letivo)}</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }}
-    h3 {{ color: #1a1a1a; }}
-    ul {{ margin: 8px 0 12px 20px; }}
-    li {{ margin: 4px 0; }}
-  </style>
-</head>
-<body>
-{parecer_html}
-</body>
-</html>"""
+    filename = f"parecer_{ce_slug}_{ano_letivo}.txt".replace("/", "-")
 
     return Response(
-        html_doc,
-        mimetype="text/html; charset=utf-8",
+        parecer_texto,
+        mimetype="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

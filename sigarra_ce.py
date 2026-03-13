@@ -745,3 +745,47 @@ def obter_pareceres_ano_anterior(
 
     return extrair_pareceres_texto(html_str)
 
+
+# ---------------------------------------------------------------------------
+# Submissão de parecer ao SIGARRA
+# ---------------------------------------------------------------------------
+
+_SAVE_PARECER_URL = f"{SIGARRA_BASE}/relcur_geral.save_parecer"
+
+_ORGAOS_VALIDOS = {"CC", "CP", "CA"}
+
+
+def submeter_parecer_sigarra(
+    sess: SigarraSession,
+    pv_id: str,
+    orgao: str,
+    texto: str,
+) -> None:
+    """Submete um parecer ao SIGARRA via POST.
+
+    Args:
+        pv_id:  ID do relatório (pode ser "3c:NNN" para doutoramentos).
+        orgao:  "CP", "CC" ou "CA".
+        texto:  Texto do parecer (plain text, max 10 000 caracteres).
+
+    Raises:
+        ValueError: órgão inválido ou pv_id vazio.
+        PermissionError: sessão sem permissão para submeter.
+        RuntimeError: erro HTTP inesperado.
+    """
+    if not pv_id:
+        raise ValueError("pv_id não disponível para submissão")
+    orgao_up = (orgao or "").upper()
+    if orgao_up not in _ORGAOS_VALIDOS:
+        raise ValueError(f"Órgão inválido para submissão: {orgao!r} (aceites: CC, CP, CA)")
+
+    inst_id = pv_id[3:] if pv_id.startswith("3c:") else pv_id
+    campo = f"pv_parecer_{orgao_up.lower()}"
+
+    data = {
+        "pv_inst_id": inst_id,
+        "pv_orgao": orgao_up,
+        campo: texto[:10000],
+    }
+    sess.post_form(_SAVE_PARECER_URL, data)
+
