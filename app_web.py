@@ -2011,19 +2011,26 @@ def login_oidc_callback():
         </div>""")
 
     # Tentar obter sessão SIGARRA real via troca de token OIDC
+    # Tenta access_token e id_token (o SIGARRA pode exigir um ou outro)
     user_sess = None
-    access_token = token_data.get("access_token", "")
     flask_session.pop("oidc_sess_debug", None)
-    if access_token:
+    _debug_msgs = []
+    for _tok_key in ("access_token", "id_token"):
+        _tok = token_data.get(_tok_key, "")
+        if not _tok:
+            _debug_msgs.append(f"{_tok_key}: ausente")
+            continue
         try:
-            user_sess = SigarraSession.from_oidc_token(access_token, codigo)
-            app.logger.info("login_oidc_callback: sessão SIGARRA obtida via token OIDC para %s", codigo)
+            user_sess = SigarraSession.from_oidc_token(_tok, codigo)
+            app.logger.info("login_oidc_callback: sessão SIGARRA obtida via %s para %s", _tok_key, codigo)
+            flask_session["oidc_sess_debug"] = f"ok via {_tok_key}"
+            break
         except Exception as e:
-            _err_msg = str(e)
-            app.logger.warning("login_oidc_callback: troca de token OIDC falhou, a usar clone: %s", _err_msg)
-            flask_session["oidc_sess_debug"] = _err_msg
-    else:
-        flask_session["oidc_sess_debug"] = "access_token ausente na resposta do Keycloak"
+            _err_msg = f"{_tok_key}: {e}"
+            app.logger.warning("login_oidc_callback: %s", _err_msg)
+            _debug_msgs.append(_err_msg)
+    if user_sess is None:
+        flask_session["oidc_sess_debug"] = " | ".join(_debug_msgs)
 
     # Fallback: clonar sessão do servidor
     if user_sess is None:

@@ -241,9 +241,13 @@ class SigarraSession:
             sess._autenticado = True
             return sess
         except urllib.error.HTTPError as e:
+            try:
+                body = e.read().decode("utf-8", errors="replace")[:300]
+            except Exception:
+                body = ""
             if e.code == 403:
-                raise PermissionError("Token OIDC inválido ou sem acesso ao SIGARRA (HTTP 403)") from e
-            raise RuntimeError(f"Erro HTTP {e.code} ao trocar token OIDC por sessão SIGARRA") from e
+                raise PermissionError(f"Token OIDC inválido ou sem acesso ao SIGARRA (HTTP 403){': ' + body if body else ''}") from e
+            raise RuntimeError(f"Erro HTTP {e.code} ao trocar token OIDC por sessão SIGARRA{': ' + body if body else ''}") from e
         except urllib.error.URLError as e:
             raise ConnectionError(f"Erro de rede ao contactar endpoint OIDC SIGARRA: {e}") from e
 
