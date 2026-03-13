@@ -1246,7 +1246,7 @@ def login():
     csrf = _get_csrf_token()
     _alt_links = []
     if _oidc_config()["client_id"]:
-        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada</a> (permite gerar parecer mas não submeter no SIGARRA por agora)')
+        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada</a>')
     _alt_logins_html = "".join(
         f'<p style="margin:10px 0 0;font-size:0.9em;">{l}</p>' for l in _alt_links
     )
@@ -2801,10 +2801,9 @@ def preview(job_id: str):
         if _relatorio_url else ""
     )
 
-    # Botão de submissão: login por password ou admin; perspetiva CC/CP/CA
+    # Botão de submissão: qualquer login autenticado; perspetiva CC/CP/CA
     _pode_submeter = (
-        (_is_admin(sess) or flask_session.get("login_method") == "password")
-        and (job.perspetiva or "").upper() in ("CC", "CP", "CA")
+        (job.perspetiva or "").upper() in ("CC", "CP", "CA")
         and bool(job.pv_id)
     )
     # Verificar se já existe parecer no SIGARRA (aviso antes de sobrescrever)
@@ -2896,13 +2895,6 @@ def download_parecer(job_id: str):
     ce_slug = re.sub(r"[^a-z0-9]+", "-", (job.ce_nome or "ce").lower()).strip("-")
 
     if action == "submeter_sigarra":
-        # Submissão direta ao SIGARRA: requer password ou admin
-        if not _is_admin(sess) and flask_session.get("login_method") != "password":
-            return _page("Submissão não disponível", """
-            <div class="card">
-              <p class="status-err">A submissão direta ao SIGARRA requer autenticação por password SIGARRA.</p>
-              <p><a href="/login">Fazer login por password</a></p>
-            </div>"""), 403
         try:
             submeter_parecer_sigarra(sess, job.pv_id, job.perspetiva, parecer_texto)
         except PermissionError as e:
