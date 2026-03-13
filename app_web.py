@@ -3029,7 +3029,7 @@ def notificar_post(job_id: str):
       {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
       <p class="status-ok">Email de notificação enviado para {_esc(notif_email)}.</p>
       <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
-    </div>""", step=4)
+    </div>""", step=5)
 
 
 # ---------------------------------------------------------------------------
