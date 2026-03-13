@@ -2013,12 +2013,17 @@ def login_oidc_callback():
     # Tentar obter sessão SIGARRA real via troca de token OIDC
     user_sess = None
     access_token = token_data.get("access_token", "")
+    flask_session.pop("oidc_sess_debug", None)
     if access_token:
         try:
             user_sess = SigarraSession.from_oidc_token(access_token, codigo)
             app.logger.info("login_oidc_callback: sessão SIGARRA obtida via token OIDC para %s", codigo)
         except Exception as e:
-            app.logger.warning("login_oidc_callback: troca de token OIDC falhou, a usar clone: %s", e)
+            _err_msg = str(e)
+            app.logger.warning("login_oidc_callback: troca de token OIDC falhou, a usar clone: %s", _err_msg)
+            flask_session["oidc_sess_debug"] = _err_msg
+    else:
+        flask_session["oidc_sess_debug"] = "access_token ausente na resposta do Keycloak"
 
     # Fallback: clonar sessão do servidor
     if user_sess is None:
@@ -2387,10 +2392,12 @@ def ces():
         _oidc_sess_note = ""
         if flask_session.get("login_method") == "oidc" and is_admin:
             _oidc_sess_type = flask_session.get("oidc_sess_type", "")
+            _oidc_debug = flask_session.get("oidc_sess_debug", "")
             if _oidc_sess_type == "direct":
                 _oidc_sess_note = ' <span style="color:green;font-size:0.85em;">(sessão SIGARRA direta)</span>'
             elif _oidc_sess_type == "clone":
-                _oidc_sess_note = ' <span style="color:orange;font-size:0.85em;">(sessão clonada do servidor)</span>'
+                _debug_detail = f' — {_esc(_oidc_debug)}' if _oidc_debug else ""
+                _oidc_sess_note = f' <span style="color:orange;font-size:0.85em;">(sessão clonada do servidor{_debug_detail})</span>'
         cargos_html = f"""<div class="muted" style="margin:0 0 10px;font-size:0.9em;">
           {f'<strong>{docente_label}</strong>{_oidc_sess_note}' if docente_label else ''}
           {cargos_li_html if cargos_li_html else ('<p style="margin:2px 0 0;">Sem cargos relevantes identificados no SIGARRA.</p>' if eff_code else '')}
