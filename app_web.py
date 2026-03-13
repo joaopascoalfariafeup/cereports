@@ -84,10 +84,6 @@ _FED_STATES_LOCK = threading.Lock()
 _SERVER_SESS: Optional[SigarraSession] = None
 _SERVER_SESS_LOCK = threading.Lock()
 
-# Estados OAuth Microsoft em curso: state → expires_at
-_MS_STATES: dict[str, float] = {}
-_MS_STATES_LOCK = threading.Lock()
-
 # Estados OAuth OIDC em curso: state → expires_at
 _OIDC_STATES: dict[str, float] = {}
 _OIDC_STATES_LOCK = threading.Lock()
@@ -103,14 +99,6 @@ _PERSPETIVA_LABELS_WEB = {
     "DCE": "Diretor do Ciclo de Estudos — Auto-avaliação (DCE)",
 }
 
-# Configuração Microsoft OAuth (lida após load_env())
-def _ms_config() -> dict:
-    return {
-        "tenant":        os.environ.get("MS_TENANT",       "up.pt"),
-        "client_id":     os.environ.get("MS_CLIENT_ID",    ""),
-        "client_secret": os.environ.get("MS_CLIENT_SECRET",""),
-        "redirect_uri":  os.environ.get("MS_REDIRECT_URI", "https://ce.uc-reports.com/login/microsoft/callback"),
-    }
 
 # Configuração OIDC Keycloak UP (lida após load_env())
 def _oidc_config() -> dict:
@@ -499,17 +487,6 @@ def _get_server_session() -> SigarraSession:
         _SERVER_SESS = sess
         return _SERVER_SESS
 
-
-def _codigo_de_email_ms(email: str) -> Optional[str]:
-    """Extrai código SIGARRA de email Microsoft institucional UP.
-
-    up210006@up.pt          → '210006'
-    up202206705@edu.fe.up.pt → '202206705'
-    Devolve None se o padrão não for reconhecido.
-    """
-    local = email.split("@")[0].lower()
-    m = re.match(r"^up(\d+)$", local)
-    return m.group(1) if m else None
 
 
 def _is_job_owner(job: Tarefa, sess: SigarraSession) -> bool:
@@ -1570,129 +1547,6 @@ def logout():
     flask_session.pop("sigarra_login", None)
     return redirect(url_for("login"))
 
-
-# ---------------------------------------------------------------------------
-# Autenticação Microsoft OAuth (opcional; ativo se MS_CLIENT_ID configurado)
-# ---------------------------------------------------------------------------
-
-@app.get("/login/microsoft")
-def login_microsoft():
-    cfg = _ms_config()
-    if not cfg["client_id"]:
-        return _page("Erro", """<div class="card"><p>Autenticação Microsoft não configurada.</p></div>""")
-
-    with _MS_STATES_LOCK:
-        now = time.time()
-        for k in [k for k, v in _MS_STATES.items() if v < now]:
-            del _MS_STATES[k]
-        state = secrets.token_urlsafe(24)
-        _MS_STATES[state] = now + 300
-
-    params = urllib.parse.urlencode({
-        "client_id":     cfg["client_id"],
-        "response_type": "code",
-        "redirect_uri":  cfg["redirect_uri"],
-        "scope":         "openid email profile",
-        "state":         state,
-        "response_mode": "query",
-    })
-    auth_url = f"https://login.microsoftonline.com/{cfg['tenant']}/oauth2/v2.0/authorize"
-    return redirect(f"{auth_url}?{params}", code=302)
-
-
-@app.get("/login/microsoft/callback")
-def login_microsoft_callback():
-    cfg = _ms_config()
-
-    error = request.args.get("error")
-    if error:
-        desc = request.args.get("error_description", "")
-        return _page("Login Microsoft", f"""
-        <div class="card">
-          <p><b>Erro na autenticação Microsoft:</b> {_esc(desc or error)}</p>
-          <p><a href="{url_for('login')}">Voltar ao login</a></p>
-        </div>""")
-
-    code  = request.args.get("code",  "").strip()
-    state = request.args.get("state", "").strip()
-
-    with _MS_STATES_LOCK:
-        if not state or _MS_STATES.pop(state, 0) < time.time():
-            return _page("Login Microsoft", f"""
-            <div class="card">
-              <p><b>Sessão expirada ou inválida.</b></p>
-              <p><a href="{url_for('login_microsoft')}">Tentar novamente</a></p>
-            </div>""")
-
-    # Trocar code por token junto do Microsoft
-    try:
-        payload = urllib.parse.urlencode({
-            "grant_type":    "authorization_code",
-            "code":           code,
-            "redirect_uri":   cfg["redirect_uri"],
-            "client_id":      cfg["client_id"],
-            "client_secret":  cfg["client_secret"],
-            "scope":          "openid email profile",
-        }).encode()
-        req = _urllib_req.Request(
-            f"https://login.microsoftonline.com/{cfg['tenant']}/oauth2/v2.0/token",
-            data=payload,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        with _urllib_req.urlopen(req, timeout=15) as resp:
-            token_data = json.loads(resp.read().decode())
-    except Exception as e:
-        app.logger.warning("login_microsoft_callback: erro ao trocar token: %s", e)
-        return _page("Login Microsoft", f"""
-        <div class="card">
-          <p><b>Erro ao contactar Microsoft:</b> {_esc(str(e))}</p>
-          <p><a href="{url_for('login_microsoft')}">Tentar novamente</a></p>
-        </div>""")
-
-    # Extrair email do id_token (JWT; confiar no HTTPS + state CSRF para validação)
-    email = ""
-    id_token = token_data.get("id_token", "")
-    if id_token:
-        try:
-            parts = id_token.split(".")
-            if len(parts) >= 2:
-                padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
-                claims = json.loads(base64.urlsafe_b64decode(padded))
-                email = claims.get("email") or claims.get("preferred_username") or ""
-        except Exception:
-            pass
-
-    if not email:
-        return _page("Login Microsoft", f"""
-        <div class="card">
-          <p><b>Não foi possível obter email da conta Microsoft.</b></p>
-          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
-        </div>""")
-
-    codigo = _codigo_de_email_ms(email)
-    if not codigo:
-        return _page("Login Microsoft", f"""
-        <div class="card">
-          <p><b>Email não reconhecido como conta UP:</b> {_esc(email)}</p>
-          <p>É necessário o formato <code>up<i>número</i>@up.pt</code>.</p>
-          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
-        </div>""")
-
-    try:
-        server_sess = _get_server_session()
-    except Exception as e:
-        app.logger.warning("login_microsoft_callback: sessão servidor indisponível: %s", e)
-        return _page("Login Microsoft", f"""
-        <div class="card">
-          <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde.</p>
-          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
-        </div>""")
-
-    user_sess = server_sess.clone_para_utilizador(codigo)
-    _set_sigarra_session(user_sess)
-    flask_session["sigarra_login"] = email
-    flask_session["login_method"] = "microsoft"
-    return redirect(url_for("ces"))
 
 
 # ---------------------------------------------------------------------------
