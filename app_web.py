@@ -1915,6 +1915,7 @@ def login_oidc():
         "scope":         "openid email profile",
         "state":         state,
         "response_mode": "query",
+        "kc_idp_hint":   "saml",
     })
     return redirect(f"{cfg['auth_endpoint']}?{params}", code=302)
 
