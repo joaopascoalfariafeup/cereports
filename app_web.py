@@ -88,6 +88,10 @@ _SERVER_SESS_LOCK = threading.Lock()
 _MS_STATES: dict[str, float] = {}
 _MS_STATES_LOCK = threading.Lock()
 
+# Estados OAuth OIDC em curso: state → expires_at
+_OIDC_STATES: dict[str, float] = {}
+_OIDC_STATES_LOCK = threading.Lock()
+
 # OTPs de email em curso: email → {otp, codigo, expires}
 _OTPS: dict[str, dict] = {}
 _OTPS_LOCK = threading.Lock()
@@ -112,6 +116,18 @@ def _ms_config() -> dict:
         "client_secret": os.environ.get("MS_CLIENT_SECRET",""),
         "redirect_uri":  os.environ.get("MS_REDIRECT_URI", "https://ce.uc-reports.com/login/microsoft/callback"),
     }
+
+# Configuração OIDC Keycloak UP (lida após load_env())
+def _oidc_config() -> dict:
+    return {
+        "client_id":     os.environ.get("OIDC_CLIENT_ID",     ""),
+        "client_secret": os.environ.get("OIDC_CLIENT_SECRET", ""),
+        "redirect_uri":  os.environ.get("OIDC_REDIRECT_URI",  "https://ce.uc-reports.com/login/oidc/callback"),
+        "auth_endpoint":    "https://open-id.up.pt/realms/sigarra/protocol/openid-connect/auth",
+        "token_endpoint":   "https://open-id.up.pt/realms/sigarra/protocol/openid-connect/token",
+        "userinfo_endpoint":"https://open-id.up.pt/realms/sigarra/protocol/openid-connect/userinfo",
+    }
+
 
 WEB_VERBOSIDADE = int(os.environ.get("WEB_VERBOSIDADE", "0"))
 WEB_OUTPUT_RETENTION_HOURS = float(os.environ.get("WEB_OUTPUT_RETENTION_HOURS", "2"))
@@ -1448,6 +1464,7 @@ def login():
       {'<p style="margin:14px 0 0;font-size:0.9em;">Ou <a href="' + url_for("login_email") + '">Entrar com código enviado por email</a></p>' if _resend_api_key() else ''}
       <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
       {'<hr style="margin:18px 0;"><p style="margin:0 0 10px;"><a href="' + url_for("login_microsoft") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Login com conta Microsoft UP</a></p>' if _ms_config()["client_id"] else ''}
+      {'<p style="margin:8px 0 0;"><a href="' + url_for("login_oidc") + '" class="btn-secondary" style="display:inline-block;padding:8px 16px;border:1px solid #666;border-radius:4px;text-decoration:none;font-size:0.95em;">Autenticação federada UP</a></p>' if _oidc_config()["client_id"] else ''}
     </div>
     """
     return _page("Login no SIGARRA", body)
@@ -1871,6 +1888,129 @@ def login_microsoft_callback():
     _set_sigarra_session(user_sess)
     flask_session["sigarra_login"] = email
     flask_session["login_method"] = "microsoft"
+    return redirect(url_for("ces"))
+
+
+# ---------------------------------------------------------------------------
+# Autenticação OIDC Keycloak UP (opcional; ativo se OIDC_CLIENT_ID configurado)
+# ---------------------------------------------------------------------------
+
+@app.get("/login/oidc")
+def login_oidc():
+    cfg = _oidc_config()
+    if not cfg["client_id"]:
+        return _page("Erro", """<div class="card"><p>Autenticação federada não configurada.</p></div>""")
+
+    with _OIDC_STATES_LOCK:
+        now = time.time()
+        for k in [k for k, v in _OIDC_STATES.items() if v < now]:
+            del _OIDC_STATES[k]
+        state = secrets.token_urlsafe(24)
+        _OIDC_STATES[state] = now + 300
+
+    params = urllib.parse.urlencode({
+        "client_id":     cfg["client_id"],
+        "response_type": "code",
+        "redirect_uri":  cfg["redirect_uri"],
+        "scope":         "openid email profile",
+        "state":         state,
+        "response_mode": "query",
+    })
+    return redirect(f"{cfg['auth_endpoint']}?{params}", code=302)
+
+
+@app.get("/login/oidc/callback")
+def login_oidc_callback():
+    cfg = _oidc_config()
+
+    error = request.args.get("error")
+    if error:
+        desc = request.args.get("error_description", "")
+        return _page("Autenticação federada", f"""
+        <div class="card">
+          <p><b>Erro na autenticação:</b> {_esc(desc or error)}</p>
+          <p><a href="{url_for('login')}">Voltar ao login</a></p>
+        </div>""")
+
+    code  = request.args.get("code",  "").strip()
+    state = request.args.get("state", "").strip()
+
+    with _OIDC_STATES_LOCK:
+        if not state or _OIDC_STATES.pop(state, 0) < time.time():
+            return _page("Autenticação federada", f"""
+            <div class="card">
+              <p><b>Sessão expirada ou inválida.</b></p>
+              <p><a href="{url_for('login_oidc')}">Tentar novamente</a></p>
+            </div>""")
+
+    # Trocar code por token junto do Keycloak UP
+    try:
+        payload = urllib.parse.urlencode({
+            "grant_type":   "authorization_code",
+            "code":          code,
+            "redirect_uri":  cfg["redirect_uri"],
+            "client_id":     cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+        }).encode()
+        req = _urllib_req.Request(
+            cfg["token_endpoint"],
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with _urllib_req.urlopen(req, timeout=15) as resp:
+            token_data = json.loads(resp.read().decode())
+    except Exception as e:
+        app.logger.warning("login_oidc_callback: erro ao trocar token: %s", e)
+        return _page("Autenticação federada", f"""
+        <div class="card">
+          <p><b>Erro ao contactar servidor de autenticação:</b> {_esc(str(e))}</p>
+          <p><a href="{url_for('login_oidc')}">Tentar novamente</a></p>
+        </div>""")
+
+    # Extrair preferred_username do id_token (JWT)
+    username = ""
+    id_token = token_data.get("id_token", "")
+    if id_token:
+        try:
+            parts = id_token.split(".")
+            if len(parts) >= 2:
+                padded = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                claims = json.loads(base64.urlsafe_b64decode(padded))
+                username = claims.get("preferred_username") or claims.get("sub") or ""
+        except Exception:
+            pass
+
+    # preferred_username pode ser "up210006@up.pt" ou só "up210006"
+    if "@" in username:
+        username = username.split("@")[0]
+
+    # Extrair código numérico (upNNNNNN → NNNNNN) ou aceitar código alfabético (jpf)
+    if username.lower().startswith("up"):
+        codigo = username[2:]
+    else:
+        codigo = username
+
+    if not codigo:
+        return _page("Autenticação federada", f"""
+        <div class="card">
+          <p><b>Não foi possível identificar o utilizador UP.</b></p>
+          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
+        </div>""")
+
+    try:
+        server_sess = _get_server_session()
+    except Exception as e:
+        app.logger.warning("login_oidc_callback: sessão servidor indisponível: %s", e)
+        return _page("Autenticação federada", f"""
+        <div class="card">
+          <p><b>Serviço temporariamente indisponível.</b> Tente mais tarde.</p>
+          <p><a href="{url_for('login')}">Usar login SIGARRA</a></p>
+        </div>""")
+
+    user_sess = server_sess.clone_para_utilizador(codigo)
+    _set_sigarra_session(user_sess)
+    flask_session["sigarra_login"] = username + "@up.pt"
+    flask_session["login_method"] = "oidc"
     return redirect(url_for("ces"))
 
 
