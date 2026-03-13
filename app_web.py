@@ -977,6 +977,7 @@ def _page(title: str, body: str, step: int = 0) -> str:
     .status-ok {{ color: #15803d; }}
     .status-err {{ color: #b91c1c; }}
     .status-run {{ color: #1d4ed8; }}
+    .status-warn {{ background:#fef3c7; border:1px solid #f59e0b; color:#92400e; border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:0.95em; }}
     .uc-card-title {{
       margin: 0;
       display: flex;
@@ -2980,8 +2981,8 @@ def preview(job_id: str):
         except Exception:
             pass
     _aviso_existente = (
-        f'<p class="status-warn" style="margin-bottom:8px;">Atenção: já existe um parecer do '
-        f'{_esc((job.perspetiva or "").upper())} guardado no SIGARRA. A submissão irá substituí-lo.</p>'
+        f'<div class="status-warn">&#9888; Já existe um parecer do '
+        f'{_esc((job.perspetiva or "").upper())} guardado no SIGARRA. A submissão irá substituí-lo.</div>'
         if _parecer_existente else ""
     )
     _confirm_msg = (
@@ -2990,8 +2991,7 @@ def preview(job_id: str):
         "Confirma a submissão do parecer no SIGARRA?"
     )
     _btn_submeter = (
-        f'{_aviso_existente}'
-        f'<button type="submit" name="action" value="submeter_sigarra" class="btn btn-primary"'
+        f'<button type="submit" name="action" value="submeter_sigarra" class="btn"'
         f' onclick="return confirm({json.dumps(_confirm_msg)});"'
         f' id="btn-submeter">Submeter no SIGARRA</button>'
         if _pode_submeter else ""
@@ -3016,11 +3016,13 @@ def preview(job_id: str):
                   >{_esc(parecer_texto)}</textarea>
       </div>
       <div class="card">
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <button type="submit" class="btn" name="action" value="download_txt">Guardar texto</button>
+        {_aviso_existente}
+        <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           {_btn_submeter}
-          {'<span style="color:#ccc;">|</span><a href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _encaminhamento_ativo() else ''}
-          <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+          <button type="submit" name="action" value="download_txt"
+                  style="background:none;border:none;padding:0;color:var(--muted);cursor:pointer;font-size:inherit;text-decoration:underline;">Guardar texto</button>
+          {'<a style="color:var(--muted);" href="' + url_for("encaminhar_get", job_id=job_id) + '">Encaminhar para revisão</a>' if _encaminhamento_ativo() else ''}
+          <a style="color:var(--muted);" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
     </form>
@@ -3127,6 +3129,7 @@ def submissao_get(job_id: str):
     _notif_html = ""
     if _resend_api_key() and _url_edit:
         csrf = _get_csrf_token()
+        _orgao_artigo = {"CC": "do", "CP": "do", "CA": "da"}.get((job.perspetiva or "").upper(), "do")
         _orgao_label = {
             "CC": "Conselho Científico",
             "CP": "Conselho Pedagógico",
@@ -3135,7 +3138,7 @@ def submissao_get(job_id: str):
         _notif_html = f"""
         <hr style="margin:20px 0;">
         <h3 style="margin:0 0 10px;">Notificar para revisão</h3>
-        <p style="margin:0 0 12px;font-size:0.95em;">Envia um email a um membro do {_esc(_orgao_label)} com o link para o parecer no SIGARRA.</p>
+        <p style="margin:0 0 12px;font-size:0.95em;">Envia um email a um membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} com o link para o parecer no SIGARRA.</p>
         <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
           <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
           <div class="row" style="align-items:center;gap:10px;max-width:420px;">
@@ -3156,7 +3159,7 @@ def submissao_get(job_id: str):
       {_notif_html}
       <p style="margin-top:20px;"><a href="{url_for('ces')}">Voltar ao início</a></p>
     </div>"""
-    return _page("Submissão", body, step=4)
+    return _page("Submissão", body, step=5)
 
 
 @app.post("/resultado/<job_id>/notificar")
@@ -3204,13 +3207,14 @@ def notificar_post(job_id: str):
         "CP": "Conselho Pedagógico",
         "CA": "Comissão de Acompanhamento",
     }.get((job.perspetiva or "").upper(), job.perspetiva or "")
+    _orgao_artigo = {"CC": "do", "CP": "do", "CA": "da"}.get((job.perspetiva or "").upper(), "do")
 
     # Enviar email
     resend_key = _resend_api_key()
     _from = os.environ.get("RESEND_FROM", "noreply@ce.uc-reports.com")
     assunto = f"Parecer {_orgao_label} — {job.ce_nome} {job.ano_letivo} — notificação para revisão"
     corpo = (
-        f"{emissor_nome} submeteu o parecer do {_orgao_label} relativo ao ciclo de estudos "
+        f"{emissor_nome} submeteu o parecer {_orgao_artigo} {_orgao_label} relativo ao ciclo de estudos "
         f'"{job.ce_nome}", ano letivo {job.ano_letivo}, e notifica-o para revisão.\n\n'
     )
     if _url_edit:
