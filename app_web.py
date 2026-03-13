@@ -1191,11 +1191,27 @@ function setupCeYearLoader() {
   onCeChange();
 }
 
+function setupParecerCounter() {
+  var ta = _byId('field_parecer');
+  var counter = _byId('counter-parecer');
+  if (!ta || !counter) return;
+  var btnSub = _byId('btn-submeter');
+  function update() {
+    var len = ta.value.length;
+    counter.textContent = len + ' / 10000';
+    counter.style.color = len > 10000 ? '#c00' : '#888';
+    if (btnSub) btnSub.disabled = len > 10000;
+  }
+  ta.addEventListener('input', update);
+  update();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   setupLogin();
   setupProgressSSE();
   setupEditableBlocks();
   setupCeYearLoader();
+  setupParecerCounter();
 });
 """
     r = Response(js, mimetype="application/javascript")
@@ -2548,22 +2564,6 @@ def preview(job_id: str):
         </div>
       </div>
     </form>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {{
-      var ta = document.getElementById('field_parecer');
-      var counter = document.getElementById('counter-parecer');
-      if (!ta || !counter) return;
-      var btnSub = document.getElementById('btn-submeter');
-      function update() {{
-        var len = ta.value.length;
-        counter.textContent = len + ' / 10000';
-        counter.style.color = len > 10000 ? '#c00' : '#888';
-        if (btnSub) btnSub.disabled = len > 10000;
-      }}
-      ta.addEventListener('input', update);
-      update();
-    }});
-    </script>
     """
 
     return _page("Parecer", body, step=3)
