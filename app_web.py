@@ -2403,7 +2403,7 @@ def ces():
                 permitido, motivo = _ce_permitido(ce)
                 disabled_attr = "" if permitido else f' disabled title="{_esc(motivo)}"'
                 sel = " selected" if ce["nome"] == last_ce_nome and permitido else ""
-                if is_admin:
+                if is_admin and not impersonated:
                     persp_list = _perspetivas_disponiveis(ce, False, False, set(), set(), is_admin=True)
                 elif _has_cargos:
                     persp_list = _perspetivas_disponiveis(
@@ -2930,9 +2930,9 @@ def preview(job_id: str):
         if _relatorio_url else ""
     )
 
-    # Botão de submissão: só com login por password e perspetiva CC/CP/CA
+    # Botão de submissão: login por password ou admin; perspetiva CC/CP/CA
     _pode_submeter = (
-        flask_session.get("login_method") == "password"
+        (_is_admin(sess) or flask_session.get("login_method") == "password")
         and (job.perspetiva or "").upper() in ("CC", "CP", "CA")
         and bool(job.pv_id)
     )
@@ -3007,8 +3007,8 @@ def download_parecer(job_id: str):
     ce_slug = re.sub(r"[^a-z0-9]+", "-", (job.ce_nome or "ce").lower()).strip("-")
 
     if action == "submeter_sigarra":
-        # Submissão direta ao SIGARRA
-        if flask_session.get("login_method") != "password":
+        # Submissão direta ao SIGARRA: requer password ou admin
+        if not _is_admin(sess) and flask_session.get("login_method") != "password":
             return _page("Submissão não disponível", """
             <div class="card">
               <p class="status-err">A submissão direta ao SIGARRA requer autenticação por password SIGARRA.</p>
