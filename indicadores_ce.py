@@ -169,8 +169,9 @@ def extrair_indicadores(html: str) -> dict | None:
                     ind["docentes_doutorados_eti"] = _parse_num(vals[6])
                 break
 
-    # --- Carreira docente (integrados na carreira) ---
-    # Colunas: Integrados_Nº, Integrados_%, Catedráticos_Nº, Catedráticos_%, ...
+    # --- Carreira docente (integrados na carreira + investigação) ---
+    # Colunas: Integrados_Nº, Integrados_%, Catedráticos_Nº, Catedráticos_%,
+    #          Investigação_Nº, Investigação_%
     t = _find_table_after_h3(soup, r"Carreira docente")
     if t:
         for row in t.find_all("tr"):
@@ -183,6 +184,11 @@ def extrair_indicadores(html: str) -> dict | None:
                     # Derivar total_eti quando "Estatística docente" não existe (3º ciclo)
                     if "docentes_total_eti" not in ind and integrados_pct and integrados_pct > 0:
                         ind["docentes_total_eti"] = integrados_eti / (integrados_pct / 100)
+                # Docentes em unidades de investigação (colunas 5-6, só doutoramentos)
+                if len(spans) >= 5:
+                    inv_eti = _parse_num(spans[4].get_text(strip=True))
+                    if inv_eti is not None:
+                        ind["docentes_investigacao_eti"] = inv_eti
                 break
 
     # --- Eficiência formativa (última coluna) ---
@@ -255,6 +261,21 @@ def extrair_indicadores(html: str) -> dict | None:
         if last_vals:
             ind["sumarios_pct"] = sum(last_vals) / len(last_vals)
 
+    # --- Teses defendidas — nº médio de anos para conclusão (doutoramentos) ---
+    t = _find_table_after_h3(soup, r"Teses defendidas")
+    if t:
+        anos_conclusao: list[float] = []
+        for tr in t.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) >= 4:
+                # Última coluna: "Número de anos para conclusão"
+                v = _parse_num(tds[-1].get_text(strip=True))
+                if v is not None and v > 0:
+                    anos_conclusao.append(v)
+        if anos_conclusao:
+            ind["teses_n"] = len(anos_conclusao)
+            ind["teses_soma_anos"] = sum(anos_conclusao)
+
     # --- Empregabilidade (campos input) ---
     inp = soup.find("input", attrs={"name": "DIPLOM_AREAS_CE"})
     if inp and inp.get("value", "").strip():
@@ -274,7 +295,9 @@ _SOMA_KEYS = [
     "abandono_n", "abandono_inscritos",
     "feminino_n", "total_estudantes", "estrangeiros_n",
     "docentes_total_eti", "docentes_doutorados_eti", "docentes_integrados_eti",
+    "docentes_investigacao_eti",
     "diplomados_total", "diplomados_no_tempo",
+    "teses_n", "teses_soma_anos",
     "aprovacao_1ano_inscritos", "aprovacao_1ano_75pct",
 ]
 
@@ -282,6 +305,7 @@ _SOMA_KEYS = [
 def _agregar_indicadores(lista: list[dict]) -> dict:
     """Agrega indicadores de vários cursos usando rácios de somas."""
     somas: dict[str, float] = {k: 0.0 for k in _SOMA_KEYS}
+    contagens: dict[str, int] = {k: 0 for k in _SOMA_KEYS}  # cursos que contribuíram
     # Médias pesadas
     classif_sum = 0.0
     classif_w = 0
@@ -299,6 +323,7 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
             v = ind.get(k)
             if v is not None:
                 somas[k] += v
+                contagens[k] += 1
         # Classificação pesada por nº diplomados
         d = ind.get("diplomados_total") or 0
         if ind.get("classif_media_saida") and d > 0:
@@ -322,6 +347,9 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
             empreg_n += 1
 
     def _ratio(num_k: str, den_k: str) -> float | None:
+        # Só calcula se pelo menos 1 curso contribuiu para o numerador
+        if contagens[num_k] == 0:
+            return None
         d = somas[den_k]
         return somas[num_k] / d * 100 if d > 0 else None
 
@@ -338,10 +366,18 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         "feminino_pct": _ratio("feminino_n", "total_estudantes"),
         "estrangeiros_pct": _ratio("estrangeiros_n", "total_estudantes"),
         "docentes_doutorados_pct": (somas["docentes_doutorados_eti"] / somas["docentes_total_eti"] * 100
-                                    if somas["docentes_total_eti"] > 0 else None),
+                                    if contagens["docentes_doutorados_eti"] > 0 and somas["docentes_total_eti"] > 0
+                                    else None),
         "docentes_integrados_pct": (somas["docentes_integrados_eti"] / somas["docentes_total_eti"] * 100
-                                    if somas["docentes_total_eti"] > 0 else None),
+                                    if contagens["docentes_integrados_eti"] > 0 and somas["docentes_total_eti"] > 0
+                                    else None),
+        "docentes_investigacao_pct": (somas["docentes_investigacao_eti"] / somas["docentes_total_eti"] * 100
+                                      if contagens["docentes_investigacao_eti"] > 0 and somas["docentes_total_eti"] > 0
+                                      else None),
         "eficiencia_formativa_pct": _ratio("diplomados_no_tempo", "diplomados_total"),
+        "teses_media_anos": (somas["teses_soma_anos"] / somas["teses_n"]
+                             if somas["teses_n"] > 0 else None),
+        "teses_n": int(somas["teses_n"]) if somas["teses_n"] > 0 else None,
         "classif_media_saida": classif_sum / classif_w if classif_w > 0 else None,
         "aprovacao_1ano_75pct": _ratio("aprovacao_1ano_75pct", "aprovacao_1ano_inscritos"),
         "ipup_mediana_global": ipup_sum / ipup_w if ipup_w > 0 else None,
@@ -439,20 +475,78 @@ _NIVEL_LABEL = {"L": "licenciaturas", "M": "mestrados", "D": "doutoramentos"}
 
 
 # ---------------------------------------------------------------------------
+# Rácios de um CE individual (mesmas chaves que a agregação)
+# ---------------------------------------------------------------------------
+
+def calcular_racios(ind: dict) -> dict:
+    """Calcula rácios a partir dos indicadores brutos de um CE individual.
+
+    Devolve dict com as mesmas chaves que _agregar_indicadores, permitindo
+    comparação directa entre CE e agregado.
+    """
+    def _safe_div(num, den, scale=100):
+        return num / den * scale if den and den > 0 else None
+
+    total_est = ind.get("total_estudantes")
+    total_eti = ind.get("docentes_total_eti")
+
+    ab_n = ind.get("abandono_n")
+    ab_ins = ind.get("abandono_inscritos")
+    ab_total = (ab_n or 0) + (ab_ins or 0)
+
+    r: dict = {}
+    r["procura_ratio"] = _safe_div(ind.get("procura_candidatos"),
+                                    ind.get("procura_vagas"), 1)
+    r["abandono_pct"] = _safe_div(ab_n, ab_total) if ab_n is not None else None
+    r["feminino_pct"] = _safe_div(ind.get("feminino_n"), total_est)
+    r["estrangeiros_pct"] = _safe_div(ind.get("estrangeiros_n"), total_est)
+    r["docentes_doutorados_pct"] = _safe_div(ind.get("docentes_doutorados_eti"), total_eti)
+    r["docentes_integrados_pct"] = _safe_div(ind.get("docentes_integrados_eti"), total_eti)
+    r["docentes_investigacao_pct"] = _safe_div(ind.get("docentes_investigacao_eti"), total_eti)
+    r["eficiencia_formativa_pct"] = _safe_div(ind.get("diplomados_no_tempo"),
+                                               ind.get("diplomados_total"))
+    r["classif_media_saida"] = ind.get("classif_media_saida")
+    r["aprovacao_1ano_75pct"] = _safe_div(ind.get("aprovacao_1ano_75pct"),
+                                           ind.get("aprovacao_1ano_inscritos"))
+    r["ipup_mediana_global"] = ind.get("ipup_mediana_global")
+    r["ipup_taxa_preenchimento"] = ind.get("ipup_taxa_preenchimento")
+    r["sumarios_pct"] = ind.get("sumarios_pct")
+    r["empregabilidade_area_pct"] = ind.get("empregabilidade_area_pct")
+
+    # Teses (doutoramentos)
+    teses_n = ind.get("teses_n")
+    teses_soma = ind.get("teses_soma_anos")
+    r["teses_media_anos"] = teses_soma / teses_n if teses_n and teses_soma else None
+    r["teses_n"] = teses_n
+
+    return r
+
+
+# ---------------------------------------------------------------------------
 # Formatação para inclusão na prompt do LLM
 # ---------------------------------------------------------------------------
 
-def formatar_indicadores_prompt(agregados: dict, nivel: str) -> str:
-    """Formata indicadores agregados como secção de texto para a prompt do LLM."""
+def formatar_indicadores_prompt(agregados: dict, nivel: str,
+                                ce_individual: dict | None = None) -> str:
+    """Formata indicadores agregados como secção de texto para a prompt do LLM.
+
+    Se ce_individual for fornecido (indicadores brutos do CE em análise),
+    mostra o valor do CE entre parêntesis ao lado do agregado.
+    """
     nivel_label = _NIVEL_LABEL.get(nivel.upper(), "cursos")
     n = agregados.get("n_cursos", 0)
     total_est = agregados.get("total_estudantes", 0)
+
+    # Calcular rácios do CE individual (se fornecido)
+    ce_r = calcular_racios(ce_individual) if ce_individual else {}
 
     linhas = [
         f"## Indicadores comparativos ({nivel_label} FEUP, N={n} cursos, {total_est} estudantes)",
         "",
         "Valores agregados de todos os cursos do mesmo nível neste ano letivo,",
         "calculados como rácios de somas (pesados pela dimensão de cada curso).",
+        "Entre parêntesis, o valor do ciclo de estudos em análise."
+        if ce_individual else
         "Usar como referência para contextualizar os indicadores do curso em análise.",
         "",
     ]
@@ -460,15 +554,25 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str) -> str:
     def _fmt(label: str, key: str, suffix: str = "%", decimals: int = 1):
         v = agregados.get(key)
         if v is not None:
-            linhas.append(f"- {label}: {v:.{decimals}f}{suffix}")
+            ce_v = ce_r.get(key)
+            ce_txt = f" (CE: {ce_v:.{decimals}f}{suffix})" if ce_v is not None else ""
+            linhas.append(f"- {label}: {v:.{decimals}f}{suffix}{ce_txt}")
 
     _fmt("Rácio candidatos/vagas", "procura_ratio", "x")
     _fmt("Taxa de abandono", "abandono_pct")
     _fmt("Género feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
-    _fmt("Docentes doutorados (ETI)", "docentes_doutorados_pct")
+    _fmt("Docentes internos doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI)", "docentes_integrados_pct")
+    _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo previsto)", "eficiencia_formativa_pct")
+    # Teses — média de anos para conclusão (só doutoramentos)
+    teses_media = agregados.get("teses_media_anos")
+    teses_total = agregados.get("teses_n")
+    if teses_media is not None and teses_total:
+        ce_teses = ce_r.get("teses_media_anos")
+        ce_txt = f" (CE: {ce_teses:.1f} anos)" if ce_teses is not None else ""
+        linhas.append(f"- Duração média de conclusão de tese: {teses_media:.1f} anos (N={teses_total} teses){ce_txt}")
     _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
     _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
     _fmt("Mediana global IPUP (escala 1-7)", "ipup_mediana_global", "", 2)

@@ -2084,14 +2084,15 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 if _ce_tipo and job.cur_id:
                     ano_raw = job.ano_letivo[:4]
                     log.iniciar_fase("indicadores", "A obter indicadores comparativos de CEs do mesmo nível...")
-                    from indicadores_ce import obter_indicadores_agregados, formatar_indicadores_prompt
+                    from indicadores_ce import obter_indicadores_agregados, formatar_indicadores_prompt, extrair_indicadores
                     _server_sess = _get_server_session()
                     _agregados = obter_indicadores_agregados(
                         _server_sess, _ce_tipo, ano_raw,
                         progress_cb=lambda msg: log.info(f"  {msg}"),
                     )
                     if _agregados:
-                        contexto_comparativo = formatar_indicadores_prompt(_agregados, _ce_tipo)
+                        _ce_ind = extrair_indicadores(relatorio_html)
+                        contexto_comparativo = formatar_indicadores_prompt(_agregados, _ce_tipo, _ce_ind)
                         log.concluir_fase("indicadores",
                             f"Indicadores de {_agregados['n_cursos']} ciclos de estudo agregados")
                     else:
