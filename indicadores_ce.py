@@ -200,6 +200,26 @@ def extrair_indicadores(html: str) -> dict | None:
                         ind["docentes_investigacao_eti"] = inv_eti
                 break
 
+    # --- Corpo docente externo: doutorados ETI (Regime de tempo na Instituição) ---
+    # h4 "Corpo docente - externo"; colunas: Nome, UO, Categoria, Grau,
+    # Área do grau, Regime de tempo (ETI), Esforço CE, Esforço sem OT, Link
+    for h4 in soup.find_all("h4"):
+        if re.search(r"Corpo docente.*externo", h4.get_text(strip=True), re.I):
+            t_ext = h4.find_next("table")
+            if t_ext:
+                ext_dout_eti = 0.0
+                for tr in t_ext.find_all("tr"):
+                    spans = tr.find_all("span", class_="relcur_table")
+                    if len(spans) >= 6:
+                        grau = spans[3].get_text(strip=True)
+                        if re.search(r"doutoramento", grau, re.I):
+                            eti_val = _parse_num(spans[5].get_text(strip=True))
+                            if eti_val is not None:
+                                ext_dout_eti += eti_val
+                if ext_dout_eti > 0:
+                    ind["docentes_doutorados_ext_eti"] = ext_dout_eti
+            break
+
     # --- Eficiência formativa (última coluna) ---
     t = _find_table_after_h3(soup, r"Efici.ncia formativa")
     if t:
@@ -304,7 +324,8 @@ _SOMA_KEYS = [
     "abandono_n", "abandono_inscritos",
     "feminino_n", "total_estudantes", "estrangeiros_n",
     "docentes_total_eti", "docentes_total_eti_carreira",
-    "docentes_doutorados_eti", "docentes_integrados_eti",
+    "docentes_doutorados_eti", "docentes_doutorados_ext_eti",
+    "docentes_integrados_eti",
     "docentes_investigacao_eti",
     "diplomados_total", "diplomados_no_tempo",
     "teses_n", "teses_soma_anos",
@@ -383,8 +404,9 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         "abandono_pct": abandono_pct,
         "feminino_pct": _ratio("feminino_n", "total_estudantes"),
         "estrangeiros_pct": _ratio("estrangeiros_n", "total_estudantes"),
-        "docentes_doutorados_pct": (somas["docentes_doutorados_eti"] / somas["docentes_total_eti"] * 100
-                                    if contagens["docentes_doutorados_eti"] > 0 and somas["docentes_total_eti"] > 0
+        "docentes_doutorados_pct": ((somas["docentes_doutorados_eti"] + somas["docentes_doutorados_ext_eti"])
+                                    / somas["docentes_total_eti_carreira"] * 100
+                                    if contagens["docentes_doutorados_eti"] > 0 and somas["docentes_total_eti_carreira"] > 0
                                     else None),
         "docentes_integrados_pct": (somas["docentes_integrados_eti"] / somas["docentes_total_eti_carreira"] * 100
                                     if contagens["docentes_integrados_eti"] > 0 and somas["docentes_total_eti_carreira"] > 0
@@ -520,7 +542,8 @@ def calcular_racios(ind: dict) -> dict:
     r["abandono_pct"] = _safe_div(ab_n, ab_total) if ab_n is not None else None
     r["feminino_pct"] = _safe_div(ind.get("feminino_n"), total_est)
     r["estrangeiros_pct"] = _safe_div(ind.get("estrangeiros_n"), total_est)
-    r["docentes_doutorados_pct"] = _safe_div(ind.get("docentes_doutorados_eti"), total_eti)
+    dout_total = (ind.get("docentes_doutorados_eti") or 0) + (ind.get("docentes_doutorados_ext_eti") or 0)
+    r["docentes_doutorados_pct"] = _safe_div(dout_total, total_eti_carreira) if dout_total > 0 else None
     r["docentes_integrados_pct"] = _safe_div(ind.get("docentes_integrados_eti"), total_eti_carreira)
     r["docentes_investigacao_pct"] = _safe_div(ind.get("docentes_investigacao_eti"), total_eti_carreira)
     r["eficiencia_formativa_pct"] = _safe_div(ind.get("diplomados_no_tempo"),
@@ -586,7 +609,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Taxa de abandono", "abandono_pct")
     _fmt("Género feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
-    _fmt("Docentes internos doutorados (ETI, contrato)", "docentes_doutorados_pct")
+    _fmt("Docentes doutorados (ETI, internos+externos, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
