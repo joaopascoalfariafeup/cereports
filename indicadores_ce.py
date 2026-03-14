@@ -647,7 +647,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
     _fmt("Docentes doutorados (ETI, internos+externos, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
-    _fmt("Esforço docente de integrados no CE (não-convidados tempo integral)", "esforco_integrados_pct")
+    _fmt("Docentes integrados na carreira (ETI, esforço, não-convidados tempo integral)", "esforco_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
     # Teses — média de anos para conclusão (só doutoramentos)
