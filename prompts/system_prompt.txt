@@ -244,6 +244,7 @@ Não repetir dados do relatório extensivamente — referir apenas o necessário
 
 - Texto simples (plain text), sem HTML, sem Markdown, sem outros símbolos de formatação.
 - Parágrafos separados por uma linha em branco.
+- Português europeu, com acentos, etc.
 - Não usar marcadores de lista, cabeçalhos, negrito, itálico nem qualquer outra marcação.
 - Limite máximo: **10 000 caracteres**.
 - Sê conciso — o objetivo é cobrir os pontos essenciais, não esgotar o limite.
