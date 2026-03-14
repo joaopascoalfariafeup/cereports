@@ -600,28 +600,23 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
         span.string = val if val else "—"
         inp.replace_with(span)
 
-    # 0b. Preservar conteúdo dos pareceres antes de remover <form>.
-    #     O texto do parecer está num <div> ou <textarea> class="relcur_memo"
-    #     dentro de um <form> dentro de div#div_parecer_*. Como form.decompose()
-    #     elimina todos os filhos, extraímos o texto primeiro.
+    # 0b. Remover pareceres existentes no relatório atual para não
+    #     influenciar a geração de novos pareceres pelo LLM.
+    #     Vista edição: <div id="div_parecer_cc/cp/ca">
     for dp in soup.find_all("div", id=re.compile(r"^div_parecer_", re.I)):
-        label_el = dp.find("label")
-        label = label_el.get_text(strip=True) if label_el else ""
-        memo = dp.find(class_="relcur_memo")  # <div> na vista impressão, <textarea> na regular
-        if not memo:
-            continue
-        texto = memo.get_text(separator="\n", strip=True)
-        texto = re.sub(r"\n{3,}", "\n\n", texto).strip()
-        if not texto:
-            continue
-        dp.clear()
-        if label:
-            lbl = soup.new_tag("p")
-            lbl.string = label
-            dp.append(lbl)
-        p = soup.new_tag("p")
-        p.string = texto
-        dp.append(p)
+        dp.decompose()
+    #     Vista impressão: secção <h3>Pareceres</h3> + conteúdo até próximo <h3>
+    for h3 in soup.find_all("h3"):
+        if h3.get_text(strip=True) == "Pareceres":
+            siblings_to_remove = []
+            for sib in h3.next_siblings:
+                if getattr(sib, "name", None) == "h3":
+                    break
+                siblings_to_remove.append(sib)
+            for sib in siblings_to_remove:
+                sib.extract()
+            h3.decompose()
+            break
 
     # 0c. Extrair dados de gráficos Highcharts antes de remover scripts.
     _extrair_highcharts(soup)

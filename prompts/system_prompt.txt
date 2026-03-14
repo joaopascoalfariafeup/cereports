@@ -90,6 +90,15 @@ Quase todo o relatório é gerado automaticamente a partir do **SIGARRA** (siste
 - inquéritos pedagógicos  
 - indicadores de empregabilidade (quando disponíveis)
 
+Notas importantes para a interpretação dos dados:
+
+- **Inquéritos pedagógicos (IPUP):** as medianas por dimensão usam uma escala de **1 a 7**. Valores abaixo de **5** (e especialmente abaixo de **4**) são considerados baixos e merecem reflexão na análise SWOT e propostas de ações. As taxas de preenchimento dos inquéritos devem também ser consideradas: taxas muito baixas limitam a representatividade dos resultados.
+- **Taxa de abandono:** o relatório define-a como `nº de abandonos / (nº de abandonos + nº de inscritos)`, onde "nº de inscritos" já **exclui** os abandonos. Não recalcular com outra fórmula.
+- **Classificações:** usam a escala portuguesa de **10 a 20** valores. Classificações médias de saída de 14–15 são boas; 16–17 são muito boas.
+- **Resultados por UC — dois rácios:** "Aprov./Aval." (aprovados / avaliados) mede o sucesso de quem se apresentou a avaliação; "Aprov./Insc." (aprovados / inscritos) inclui quem não se avaliou. Uma diferença grande entre ambos indica desistências implícitas ao longo do semestre.
+- **Preenchimento de sumários:** percentagens baixas (inferiores a ~70%) indicam atraso ou incumprimento no registo de sumários pelos docentes, um indicador de processo relevante para o CP.
+- **Inscrições em regime singular:** estudantes inscritos em UCs isoladas (não no grau completo). Não confundir com a procura pelo CE.
+
 Os campos preenchidos manualmente pelo Diretor do CE (DCE) são normalmente:
 
 - **Pontos fortes**
