@@ -448,6 +448,8 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
                                       if contagens["docentes_investigacao_eti"] > 0 and somas["docentes_total_eti_carreira"] > 0
                                       else None),
         "esforco_integrados_pct": _ratio("esforco_integrados_eti", "esforco_total_eti"),
+        "estudantes_por_docente_eti": (somas["total_estudantes"] / somas["esforco_total_eti"]
+                                       if somas["esforco_total_eti"] > 0 else None),
         "eficiencia_formativa_pct": _ratio("diplomados_no_tempo", "diplomados_total"),
         "teses_media_anos": (somas["teses_soma_anos"] / somas["teses_n"]
                              if somas["teses_n"] > 0 else None),
@@ -582,6 +584,10 @@ def calcular_racios(ind: dict) -> dict:
     r["docentes_investigacao_pct"] = _safe_div(ind.get("docentes_investigacao_eti"), total_eti_carreira)
     r["esforco_integrados_pct"] = _safe_div(ind.get("esforco_integrados_eti"),
                                              ind.get("esforco_total_eti"))
+    esf_total = ind.get("esforco_total_eti")
+    r["estudantes_por_docente_eti"] = (total_est / esf_total
+                                       if total_est and esf_total and esf_total > 0
+                                       else None)
     r["eficiencia_formativa_pct"] = _safe_div(ind.get("diplomados_no_tempo"),
                                                ind.get("diplomados_total"))
     r["classif_media_saida"] = ind.get("classif_media_saida")
@@ -648,6 +654,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Docentes doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
     _fmt("Docentes integrados na carreira (ETI, esforço, não-convidados tempo integral)", "esforco_integrados_pct")
+    _fmt("Estudantes inscritos por docente (ETI esforço)", "estudantes_por_docente_eti", "", 1)
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
     # Teses — média de anos para conclusão (só doutoramentos)
