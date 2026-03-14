@@ -367,13 +367,18 @@ def _gera_lista_anos_letivos() -> list[dict]:
     return anos
 
 
-def _ce_titulo_html(ce_nome: str, ano: str = "") -> str:
+_PERSPETIVA_SUFIXO = {"CC": "Parecer CC", "CP": "Parecer CP", "CA": "Parecer CA", "DCE": "Auto-avaliação"}
+
+
+def _ce_titulo_html(ce_nome: str, ano: str = "", perspetiva: str = "") -> str:
     nome_esc = _esc(ce_nome or "(sem nome)")
     ano_html = f'<span class="uc-ano-tag"> — {_esc(ano)}</span>' if ano else ""
+    sufixo = _PERSPETIVA_SUFIXO.get((perspetiva or "").upper(), "")
+    sufixo_html = f'<span class="uc-ano-tag"> — {_esc(sufixo)}</span>' if sufixo else ""
     return (
         f'<p class="uc-card-title">'
         f'<span class="uc-sigla-tag">{nome_esc}</span>'
-        f'{ano_html}'
+        f'{ano_html}{sufixo_html}'
         f'</p>'
     )
 
@@ -2294,7 +2299,7 @@ def progress(job_id: str):
 
     body = f"""
     <div class="card">
-      {_ce_titulo_html(job.ce_nome, ano_label)}
+      {_ce_titulo_html(job.ce_nome, ano_label, job.perspetiva)}
       <div class="muted">{estado}</div>
     </div>
     """
@@ -2474,7 +2479,7 @@ def preview(job_id: str):
 
     body = f"""
     <div class="card">
-      {_ce_titulo_html(ce_nome, ano_letivo)}
+      {_ce_titulo_html(ce_nome, ano_letivo, job.perspetiva)}
       <div class="muted">Parecer gerado — reveja e edite conforme necessário.</div>
       {(f'<p>{_link_relatorio}</p>') if _link_relatorio else ""}
     </div>
@@ -2604,7 +2609,7 @@ def submissao_get(job_id: str):
 
     body = f"""
     <div class="card">
-      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo, job.perspetiva)}
       {_status_msg}
       {_link_ver}
       {_notif_html}
@@ -2712,7 +2717,7 @@ def notificar_post(job_id: str):
 
     return _page("Notificação enviada", f"""
     <div class="card">
-      {_ce_titulo_html(job.ce_nome, job.ano_letivo)}
+      {_ce_titulo_html(job.ce_nome, job.ano_letivo, job.perspetiva)}
       <p class="status-ok">Email de notificação enviado para {_esc(notif_email)}.</p>
       <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
     </div>""", step=5)
