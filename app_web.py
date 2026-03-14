@@ -758,13 +758,12 @@ def _page(title: str, body: str, step: int = 0) -> str:
     .uc-card-title {{
       margin: 0;
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      min-width: 0;
-      overflow: hidden;
       gap: 0;
     }}
-    .uc-sigla-tag {{ font-weight: normal; flex-shrink: 0; white-space: nowrap; }}
-    .uc-ano-tag {{ font-weight: normal; flex-shrink: 0; white-space: nowrap; }}
+    .uc-sigla-tag {{ font-weight: normal; }}
+    .uc-ano-tag {{ font-weight: normal; white-space: nowrap; }}
     .stepper-bar {{
       display: flex;
       align-items: center;
