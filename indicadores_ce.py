@@ -119,6 +119,9 @@ def extrair_indicadores(html: str) -> dict | None:
         v = _last_col_value(t, r"Nota m.+dia de entrada")
         if v:
             ind["nota_media_entrada"] = _parse_num(v)
+        _log.debug("indicadores procura: vagas=%s cand=%s coloc=%s nota=%s",
+                   ind.get("procura_vagas"), ind.get("procura_candidatos"),
+                   ind.get("procura_colocados"), ind.get("nota_media_entrada"))
 
     # --- Abandono (última coluna) ---
     t = _find_table_after_h3(soup, r"Abandono do CE")
@@ -574,6 +577,8 @@ def calcular_racios(ind: dict) -> dict:
     r: dict = {}
     r["procura_ratio"] = _safe_div(ind.get("procura_candidatos"),
                                     ind.get("procura_vagas"), 1)
+    _log.debug("calcular_racios procura: cand=%s vagas=%s ratio=%s",
+               ind.get("procura_candidatos"), ind.get("procura_vagas"), r["procura_ratio"])
     r["nota_media_entrada"] = ind.get("nota_media_entrada")
     r["abandono_pct"] = _safe_div(ab_n, ab_total) if ab_n is not None else None
     r["feminino_pct"] = _safe_div(ind.get("feminino_n"), total_est)
