@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+import unicodedata
 import urllib.request as _req
 from bs4 import BeautifulSoup
 
@@ -405,14 +406,18 @@ def obter_diretor_curso(sess: SigarraSession, cur_id: str) -> str:
         return ""
 
     soup = BeautifulSoup(html_str, "html.parser")
-    # Procura label "Diretor" / "Diretora" numa tabela e extrai o link do docente
+    # Procura label "Diretor" / "Diretora" (excluindo "Adjunto") numa tabela
+    # e extrai o código do link (dois padrões de URL no SIGARRA):
+    #   func_geral.formview?p_codigo=NNN
+    #   vld_entidades_geral.entidade_pagina?pct_codigo=NNN
+    _RE_CODIGO = re.compile(r"(?:p_codigo|pct_codigo)=(\d+)", re.I)
     for label_el in soup.find_all(["th", "td"]):
-        if re.search(r"\bdiret", label_el.get_text(strip=True), re.I):
+        label_text = label_el.get_text(strip=True).lower()
+        if re.search(r"\bdiret", label_text) and "adjunt" not in label_text:
             row = label_el.find_parent("tr")
             if row:
-                a = row.find("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I))
-                if a:
-                    m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
+                for a in row.find_all("a", href=True):
+                    m = _RE_CODIGO.search(a.get("href", ""))
                     if m:
                         return m.group(1)
     return ""
@@ -434,7 +439,8 @@ def listar_membros_orgao(sess: SigarraSession, perspetiva: str, cur_id: str = ""
     else:
         # DCE: auto-avaliação, sem notificação
         return []
-    membros.sort(key=lambda m: m.get("nome", ""))
+    membros.sort(key=lambda m: unicodedata.normalize("NFKD", m.get("nome", ""))
+                 .encode("ascii", "ignore").decode().lower())
     return membros
 
 
