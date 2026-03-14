@@ -113,6 +113,12 @@ def extrair_indicadores(html: str) -> dict | None:
         v = _last_col_value(t, r"N.*Candidatos")
         if v:
             ind["procura_candidatos"] = _parse_count(v)
+        v = _last_col_value(t, r"N.*Colocados$")
+        if v:
+            ind["procura_colocados"] = _parse_count(v)
+        v = _last_col_value(t, r"Nota m.dia de entrada")
+        if v:
+            ind["nota_media_entrada"] = _parse_num(v)
 
     # --- Abandono (última coluna) ---
     t = _find_table_after_h3(soup, r"Abandono do CE")
@@ -291,7 +297,7 @@ def extrair_indicadores(html: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 _SOMA_KEYS = [
-    "procura_candidatos", "procura_vagas",
+    "procura_candidatos", "procura_vagas", "procura_colocados",
     "abandono_n", "abandono_inscritos",
     "feminino_n", "total_estudantes", "estrangeiros_n",
     "docentes_total_eti", "docentes_doutorados_eti", "docentes_integrados_eti",
@@ -317,6 +323,8 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
     sumarios_n = 0
     empreg_sum = 0.0
     empreg_n = 0
+    nota_sum = 0.0
+    nota_w = 0
 
     for ind in lista:
         for k in _SOMA_KEYS:
@@ -345,6 +353,11 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         if ind.get("empregabilidade_area_pct") is not None:
             empreg_sum += ind["empregabilidade_area_pct"]
             empreg_n += 1
+        # Nota média de entrada pesada por nº colocados
+        n_col = ind.get("procura_colocados") or 0
+        if ind.get("nota_media_entrada") and n_col > 0:
+            nota_sum += ind["nota_media_entrada"] * n_col
+            nota_w += n_col
 
     def _ratio(num_k: str, den_k: str) -> float | None:
         # Só calcula se pelo menos 1 curso contribuiu para o numerador
@@ -362,6 +375,7 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         "total_estudantes": int(somas["total_estudantes"]),
         "procura_ratio": (somas["procura_candidatos"] / somas["procura_vagas"]
                           if somas["procura_vagas"] > 0 else None),
+        "nota_media_entrada": nota_sum / nota_w if nota_w > 0 else None,
         "abandono_pct": abandono_pct,
         "feminino_pct": _ratio("feminino_n", "total_estudantes"),
         "estrangeiros_pct": _ratio("estrangeiros_n", "total_estudantes"),
@@ -497,6 +511,7 @@ def calcular_racios(ind: dict) -> dict:
     r: dict = {}
     r["procura_ratio"] = _safe_div(ind.get("procura_candidatos"),
                                     ind.get("procura_vagas"), 1)
+    r["nota_media_entrada"] = ind.get("nota_media_entrada")
     r["abandono_pct"] = _safe_div(ab_n, ab_total) if ab_n is not None else None
     r["feminino_pct"] = _safe_div(ind.get("feminino_n"), total_est)
     r["estrangeiros_pct"] = _safe_div(ind.get("estrangeiros_n"), total_est)
@@ -558,7 +573,11 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
             ce_txt = f" (CE: {ce_v:.{decimals}f}{suffix})" if ce_v is not None else ""
             linhas.append(f"- {label}: {v:.{decimals}f}{suffix}{ce_txt}")
 
-    _fmt("Rácio candidatos/vagas", "procura_ratio", "x")
+    _procura_label = ("Rácio candidatos 1ª opção/vagas"
+                       if nivel.upper() == "L" else "Rácio candidatos/vagas")
+    _fmt(_procura_label, "procura_ratio", "x")
+    if nivel.upper() == "L":
+        _fmt("Nota média de entrada (pesada por nº colocados)", "nota_media_entrada", " pontos")
     _fmt("Taxa de abandono", "abandono_pct")
     _fmt("Género feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
@@ -575,7 +594,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
         linhas.append(f"- Duração média de conclusão de tese: {teses_media:.1f} anos (N={teses_total} teses){ce_txt}")
     _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
     _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
-    _fmt("Mediana global IPUP (escala 1-7)", "ipup_mediana_global", "", 2)
+    _fmt("IPUP média das medianas (escala 1-7, pesada por nº estudantes)", "ipup_mediana_global", "", 2)
     _fmt("Taxa de preenchimento IPUP", "ipup_taxa_preenchimento")
     _fmt("Preenchimento de sumários (última data disponível)", "sumarios_pct")
     _fmt("Empregabilidade na área do CE", "empregabilidade_area_pct")
