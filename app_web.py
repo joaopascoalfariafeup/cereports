@@ -2091,7 +2091,14 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                         progress_cb=lambda msg: log.info(f"  {msg}"),
                     )
                     if _agregados:
-                        _ce_ind = extrair_indicadores(relatorio_html)
+                        # Extrair indicadores do CE em análise (HTML original, não limpo)
+                        from indicadores_ce import PRINT_URL_12C, PRINT_URL_3C
+                        if job.pv_id.startswith("3c:"):
+                            _print_url = PRINT_URL_3C.format(job.pv_id[3:])
+                        else:
+                            _print_url = PRINT_URL_12C.format(job.pv_id)
+                        _ce_html_raw = _server_sess.fetch_html(_print_url, timeout=30)
+                        _ce_ind = extrair_indicadores(_ce_html_raw)
                         contexto_comparativo = formatar_indicadores_prompt(_agregados, _ce_tipo, _ce_ind)
                         log.concluir_fase("indicadores",
                             f"Indicadores de {_agregados['n_cursos']} ciclos de estudo agregados")

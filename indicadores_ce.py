@@ -26,8 +26,8 @@ _AGREGADOS_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
 _AGREGADOS_TTL = 24 * 3600  # 24 h
 
 # URLs das versões de impressão
-_PRINT_URL_12C = SIGARRA_BASE + "/relcur_geral.proc_edit?pv_id={}&pv_print_ver=S"
-_PRINT_URL_3C = SIGARRA_BASE + "/relcur_geral.rel3c_edit?pv_id={}&pv_print_ver=S"
+PRINT_URL_12C = SIGARRA_BASE + "/relcur_geral.proc_edit?pv_id={}&pv_print_ver=S"
+PRINT_URL_3C = SIGARRA_BASE + "/relcur_geral.rel3c_edit?pv_id={}&pv_print_ver=S"
 
 
 # ---------------------------------------------------------------------------
@@ -439,9 +439,9 @@ def obter_indicadores_agregados(
 
         pv_id = rel["pv_id"]
         if pv_id.startswith("3c:"):
-            url = _PRINT_URL_3C.format(pv_id[3:])
+            url = PRINT_URL_3C.format(pv_id[3:])
         else:
-            url = _PRINT_URL_12C.format(pv_id)
+            url = PRINT_URL_12C.format(pv_id)
 
         try:
             html = sess.fetch_html(url, timeout=30)
@@ -565,7 +565,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Docentes internos doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI)", "docentes_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
-    _fmt("Eficiência formativa (diplomados no tempo previsto)", "eficiencia_formativa_pct")
+    _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
     # Teses — média de anos para conclusão (só doutoramentos)
     teses_media = agregados.get("teses_media_anos")
     teses_total = agregados.get("teses_n")
@@ -577,7 +577,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
     _fmt("Mediana global IPUP (escala 1-7)", "ipup_mediana_global", "", 2)
     _fmt("Taxa de preenchimento IPUP", "ipup_taxa_preenchimento")
-    _fmt("Preenchimento de sumários", "sumarios_pct")
+    _fmt("Preenchimento de sumários (última data disponível)", "sumarios_pct")
     _fmt("Empregabilidade na área do CE", "empregabilidade_area_pct")
 
     return "\n".join(linhas)
