@@ -640,7 +640,8 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
         v = agregados.get(key)
         if v is not None:
             ce_v = ce_r.get(key)
-            ce_txt = f" (CE: {ce_v:.{decimals}f}{suffix})" if ce_v is not None else ""
+            ce_txt = (f" (CE: {ce_v:.{decimals}f}{suffix})" if ce_v is not None
+                      else " (CE: N/A)" if ce_individual else "")
             linhas.append(f"- {label}: {v:.{decimals}f}{suffix}{ce_txt}")
 
     _procura_label = ("Rácio candidatos 1ª opção/vagas"
@@ -662,7 +663,8 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     teses_total = agregados.get("teses_n")
     if teses_media is not None and teses_total:
         ce_teses = ce_r.get("teses_media_anos")
-        ce_txt = f" (CE: {ce_teses:.1f} anos)" if ce_teses is not None else ""
+        ce_txt = (f" (CE: {ce_teses:.1f} anos)" if ce_teses is not None
+                  else " (CE: N/A)" if ce_individual else "")
         linhas.append(f"- Duração média de conclusão de tese: {teses_media:.1f} anos (N={teses_total} teses){ce_txt}")
     _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
     _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
