@@ -35,7 +35,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra, obter_parecer_atual_sigarra
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra, obter_parecer_atual_sigarra, listar_membros_orgao, obter_diretor_curso
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -2585,27 +2585,48 @@ def submissao_get(job_id: str):
 
     _notif_html = ""
     if _resend_api_key() and _url_edit:
-        csrf = _get_csrf_token()
         _orgao_artigo = {"CC": "do", "CP": "do", "CA": "da"}.get((job.perspetiva or "").upper(), "do")
         _orgao_label = {
             "CC": "Conselho Científico",
             "CP": "Conselho Pedagógico",
             "CA": "Comissão de Acompanhamento",
         }.get((job.perspetiva or "").upper(), job.perspetiva or "")
-        _notif_html = f"""
-        <hr style="margin:20px 0;">
-        <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
-        <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
-          <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-          <div class="row" style="align-items:center;gap:10px;max-width:400px;">
-            <label style="min-width:90px;">Código UP:</label>
-            <input name="notif_codigo" type="text" placeholder="ex: 210006 ou 201606486"
-                   pattern="\\d{{5,9}}"
-                   title="Código numérico UP (5 a 9 dígitos)"
-                   style="flex:1;" required>
-            <button type="submit">Notificar</button>
-          </div>
-        </form>"""
+
+        # Obter membros do órgão e excluir utilizador atual e diretor de curso
+        _excluir: set[str] = set()
+        _excluir.add(_effective_codigo(sess))
+        try:
+            _dir_code = obter_diretor_curso(_get_server_session(), job.cur_id)
+            if _dir_code:
+                _excluir.add(_dir_code)
+        except Exception:
+            pass
+        try:
+            _membros_raw = listar_membros_orgao(_get_server_session(), job.perspetiva, job.cur_id)
+        except Exception:
+            _membros_raw = []
+        _membros = [m for m in _membros_raw if m["codigo"] not in _excluir]
+
+        if _membros:
+            csrf = _get_csrf_token()
+            _options = "".join(
+                f'<option value="{_esc(m["codigo"])}">{_esc(m["nome"])}</option>'
+                for m in _membros
+            )
+            _notif_html = f"""
+            <hr style="margin:20px 0;">
+            <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
+            <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
+              <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+              <div class="row" style="align-items:center;gap:10px;max-width:500px;">
+                <label style="min-width:70px;">Membro:</label>
+                <select name="notif_codigo" style="flex:1;" required>
+                  <option value="">— selecionar —</option>
+                  {_options}
+                </select>
+                <button type="submit">Notificar</button>
+              </div>
+            </form>"""
 
     body = f"""
     <div class="card">
@@ -2634,31 +2655,23 @@ def notificar_post(job_id: str):
     if not re.match(r"^\d{5,9}$", dest_codigo):
         return _page("Notificação", f"""
         <div class="card">
-          <p class="status-err">Código UP inválido: deve ter 5 a 9 dígitos numéricos.</p>
+          <p class="status-err">Código UP inválido.</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 400
     # Estudantes (20XXXXXXX) → @edu.up.pt; docentes → @up.pt
     _dominio = "edu.up.pt" if re.match(r"^20\d{7,}$", dest_codigo) else "up.pt"
     notif_email = f"up{dest_codigo}@{_dominio}"
 
-    # Validar que o destinatário existe e tem permissão
-    _dest_cargos = {}
+    # Validar que o destinatário consta da lista de membros do órgão
     try:
-        server_sess = _get_server_session()
-        _dest_cargos = obter_cargos_docente(server_sess, dest_codigo)
+        _membros = listar_membros_orgao(_get_server_session(), job.perspetiva, job.cur_id)
     except Exception:
-        pass
-    if not _dest_cargos.get("nome"):
+        _membros = []
+    _dest_membro = next((m for m in _membros if m["codigo"] == dest_codigo), None)
+    if not _dest_membro:
         return _page("Notificação", f"""
         <div class="card">
-          <p class="status-err">Não foi possível encontrar o utilizador com código {_esc(dest_codigo)} no SIGARRA.</p>
-          <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
-        </div>"""), 400
-    if not _reviewer_tem_permissao(dest_codigo, job.cur_id, job.perspetiva):
-        return _page("Notificação", f"""
-        <div class="card">
-          <p class="status-err">{_esc(_dest_cargos.get('nome', dest_codigo))} não tem cargo que permita emitir parecer de
-          {_esc((job.perspetiva or "").upper())} para este ciclo de estudos.</p>
+          <p class="status-err">O destinatário selecionado não consta da lista de membros do órgão.</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 403
 

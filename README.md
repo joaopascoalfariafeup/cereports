@@ -69,7 +69,6 @@ install.txt         # Instruções de instalação no servidor
 | `WEB_OUTPUT_RETENTION_HOURS` | `2` | Retenção de ficheiros de output (horas) |
 | `OIDC_CLIENT_ID` | — | Client ID OIDC Keycloak UP (vazio = desativado) |
 | `OIDC_REDIRECT_URI` | — | Redirect URI OIDC |
-| `ENABLE_EMAIL_OTP` | `0` | Login por email OTP (`0`=desativado, `1`=ativado) |
 | `RESEND_FROM` | `noreply@ce.uc-reports.com` | Remetente para emails de notificação |
 
 ## Instalação

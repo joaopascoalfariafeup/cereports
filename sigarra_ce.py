@@ -27,22 +27,23 @@ _EMPTY_CARGOS: dict = {
 
 _SIGLA_CACHE: dict[str, str] = {}
 
-# Cache da composição do Conselho Pedagógico da FEUP (página pública)
+# Cache da composição do CP e CC da FEUP (páginas públicas)
 _CP_FEUP_URL = f"{SIGARRA_BASE}/web_base.gera_pagina?p_pagina=31720"
-_CP_CACHE: "tuple[float, frozenset[str]] | None" = None
+_CC_FEUP_URL = f"{SIGARRA_BASE}/web_base.gera_pagina?p_pagina=31719"
+_CP_MEMBERS_CACHE: "tuple[float, list[dict]] | None" = None
+_CC_MEMBERS_CACHE: "tuple[float, list[dict]] | None" = None
 _CP_CACHE_TTL = 6 * 3600  # 6 horas
 
 
-def _obter_codigos_cp_feup(sess: "SigarraSession | None" = None) -> frozenset[str]:
-    """Obtém os códigos de todos os membros do CP da FEUP (com cache de 6h).
+def _obter_membros_cp_feup(sess: "SigarraSession | None" = None) -> list[dict]:
+    """Obtém membros do CP da FEUP com códigos e nomes (cache 6h).
 
-    Faz scraping da página pública de composição do CP e devolve um frozenset
-    com os códigos pessoais (docentes) e números únicos (estudantes) dos membros.
+    Returns list of {"codigo": str, "nome": str}.
     """
-    global _CP_CACHE
+    global _CP_MEMBERS_CACHE
     now = time.time()
-    if _CP_CACHE is not None:
-        ts, cached = _CP_CACHE
+    if _CP_MEMBERS_CACHE is not None:
+        ts, cached = _CP_MEMBERS_CACHE
         if now - ts < _CP_CACHE_TTL:
             return cached
 
@@ -56,26 +57,79 @@ def _obter_codigos_cp_feup(sess: "SigarraSession | None" = None) -> frozenset[st
                 resp.headers.get_content_charset() or "utf-8", errors="replace"
             )
     except Exception:
-        return frozenset()
+        return []
 
     soup = BeautifulSoup(html_str, "html.parser")
-    codigos: set[str] = set()
+    membros: list[dict] = []
+    codigos_vistos: set[str] = set()
 
-    # Membros docentes: func_geral.formview?p_codigo=NNN (case-insensitive)
+    # Membros docentes: func_geral.formview?p_codigo=NNN
     for a in soup.find_all("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I)):
         m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
         if m:
-            codigos.add(m.group(1))
+            codigo = m.group(1)
+            if codigo not in codigos_vistos:
+                codigos_vistos.add(codigo)
+                membros.append({"codigo": codigo, "nome": a.get_text(strip=True)})
 
     # Membros estudantes: fest_geral.cursos_list?pv_num_unico=NNN
     for a in soup.find_all("a", href=re.compile(r"fest_geral\.cursos_list\?pv_num_unico=\d+", re.I)):
         m = re.search(r"pv_num_unico=(\d+)", a.get("href", ""), re.I)
         if m:
-            codigos.add(m.group(1))
+            codigo = m.group(1)
+            if codigo not in codigos_vistos:
+                codigos_vistos.add(codigo)
+                membros.append({"codigo": codigo, "nome": a.get_text(strip=True)})
 
-    result = frozenset(codigos)
-    _CP_CACHE = (now, result)
-    return result
+    _CP_MEMBERS_CACHE = (now, membros)
+    return membros
+
+
+def _obter_codigos_cp_feup(sess: "SigarraSession | None" = None) -> frozenset[str]:
+    """Obtém os códigos de todos os membros do CP da FEUP (com cache de 6h)."""
+    return frozenset(m["codigo"] for m in _obter_membros_cp_feup(sess))
+
+
+def _obter_membros_cc_feup(sess: "SigarraSession | None" = None) -> list[dict]:
+    """Obtém membros do CC da FEUP com códigos e nomes (cache 6h).
+
+    Faz scraping de web_base.gera_pagina?p_pagina=31719.
+    Returns list of {"codigo": str, "nome": str}.
+    """
+    global _CC_MEMBERS_CACHE
+    now = time.time()
+    if _CC_MEMBERS_CACHE is not None:
+        ts, cached = _CC_MEMBERS_CACHE
+        if now - ts < _CP_CACHE_TTL:
+            return cached
+
+    try:
+        if sess is not None:
+            html_str = sess.fetch_html(_CC_FEUP_URL, timeout=15)
+        else:
+            req = _req.Request(_CC_FEUP_URL, headers={"User-Agent": "Mozilla/5.0"})
+            resp = _req.urlopen(req, timeout=15)
+            html_str = resp.read().decode(
+                resp.headers.get_content_charset() or "utf-8", errors="replace"
+            )
+    except Exception:
+        return []
+
+    soup = BeautifulSoup(html_str, "html.parser")
+    membros: list[dict] = []
+    codigos_vistos: set[str] = set()
+
+    # Todos os membros aparecem como func_geral.formview?p_codigo=NNN (case-insensitive)
+    for a in soup.find_all("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I)):
+        m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
+        if m:
+            codigo = m.group(1)
+            if codigo not in codigos_vistos:
+                codigos_vistos.add(codigo)
+                membros.append({"codigo": codigo, "nome": a.get_text(strip=True)})
+
+    _CC_MEMBERS_CACHE = (now, membros)
+    return membros
 
 
 def _obter_sigla_curso(sess: SigarraSession, cur_id: str) -> str:
@@ -296,6 +350,92 @@ def obter_cargos_docente(sess: SigarraSession, codigo_pessoal: str) -> dict:
         "cac_cursos": cac_cursos,
         "director_cursos": director_cursos,
     }
+
+
+# ---------------------------------------------------------------------------
+# Listagem de membros de órgãos (CP, CA) — para dropdown de notificação
+# ---------------------------------------------------------------------------
+
+def _obter_membros_ca(sess: SigarraSession, cur_id: str) -> list[dict]:
+    """Obtém membros da Comissão de Acompanhamento de um curso.
+
+    Faz scraping de CUR_GERAL.CUR_COMISSAO_acomp_LIST?pv_curso_id=NNN.
+    Returns list of {"codigo": str, "nome": str}.
+    """
+    url = f"{SIGARRA_BASE}/CUR_GERAL.CUR_COMISSAO_acomp_LIST?pv_curso_id={cur_id}"
+    try:
+        html_str = sess.fetch_html(url, timeout=15)
+    except Exception:
+        return []
+
+    soup = BeautifulSoup(html_str, "html.parser")
+    membros: list[dict] = []
+    codigos_vistos: set[str] = set()
+
+    # Docentes: func_geral.formview?p_codigo=NNN
+    for a in soup.find_all("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I)):
+        m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
+        if m:
+            codigo = m.group(1)
+            if codigo not in codigos_vistos:
+                codigos_vistos.add(codigo)
+                membros.append({"codigo": codigo, "nome": a.get_text(strip=True)})
+
+    # Estudantes: fest_geral.cursos_list?pv_num_unico=NNN
+    for a in soup.find_all("a", href=re.compile(r"fest_geral\.cursos_list\?pv_num_unico=\d+", re.I)):
+        m = re.search(r"pv_num_unico=(\d+)", a.get("href", ""), re.I)
+        if m:
+            codigo = m.group(1)
+            if codigo not in codigos_vistos:
+                codigos_vistos.add(codigo)
+                membros.append({"codigo": codigo, "nome": a.get_text(strip=True)})
+
+    return membros
+
+
+def obter_diretor_curso(sess: SigarraSession, cur_id: str) -> str:
+    """Obtém o código do diretor de curso a partir de cur_geral.cur_view.
+
+    Returns código pessoal ou "" se não encontrado.
+    """
+    url = f"{SIGARRA_BASE}/cur_geral.cur_view?pv_curso_id={cur_id}"
+    try:
+        html_str = sess.fetch_html(url, timeout=15)
+    except Exception:
+        return ""
+
+    soup = BeautifulSoup(html_str, "html.parser")
+    # Procura label "Diretor" / "Diretora" numa tabela e extrai o link do docente
+    for label_el in soup.find_all(["th", "td"]):
+        if re.search(r"\bdiret", label_el.get_text(strip=True), re.I):
+            row = label_el.find_parent("tr")
+            if row:
+                a = row.find("a", href=re.compile(r"func_geral\.formview\?p_codigo=\d+", re.I))
+                if a:
+                    m = re.search(r"p_codigo=(\d+)", a.get("href", ""), re.I)
+                    if m:
+                        return m.group(1)
+    return ""
+
+
+def listar_membros_orgao(sess: SigarraSession, perspetiva: str, cur_id: str = "") -> list[dict]:
+    """Lista membros do órgão correspondente à perspetiva.
+
+    Returns list of {"codigo": str, "nome": str}, ordenada por nome.
+    Para CC devolve lista vazia (URL da composição do CC da FEUP não conhecida).
+    """
+    persp = (perspetiva or "").upper()
+    if persp == "CP":
+        membros = list(_obter_membros_cp_feup(sess))
+    elif persp == "CC":
+        membros = list(_obter_membros_cc_feup(sess))
+    elif persp == "CA":
+        membros = _obter_membros_ca(sess, cur_id) if cur_id else []
+    else:
+        # DCE: auto-avaliação, sem notificação
+        return []
+    membros.sort(key=lambda m: m.get("nome", ""))
+    return membros
 
 
 # ---------------------------------------------------------------------------
