@@ -2515,9 +2515,7 @@ def preview(job_id: str):
         {_aviso_existente}
         <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           {_btn_submeter}
-          <button type="submit" name="action" value="download_txt"
-                  style="background:none;border:none;padding:0;color:var(--muted);cursor:pointer;font-size:inherit;">Guardar texto</button>
-          <a style="color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+          <a style="margin-left:auto;color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
     </form>

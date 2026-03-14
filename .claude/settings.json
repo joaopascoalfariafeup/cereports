@@ -6,7 +6,10 @@
       "Read(//c/Users/jpf/Downloads/parecer_mestrado-em-engenharia-de-software_2024-25 \\(2\\)/**)",
       "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''sigarra_ce.py'', doraise=True\\); py_compile.compile\\(''app_web.py'', doraise=True\\); print\\(''OK''\\)\")",
       "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''sigarra_ce.py'', doraise=True\\); print\\(''OK''\\)\")",
-      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''app_web.py'', doraise=True\\); print\\(''OK''\\)\")"
+      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''app_web.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Read(//c/Users/jpf/Downloads/**)",
+      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''indicadores_ce.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Bash(py -3 -c \":*)"
     ]
   }
 }
