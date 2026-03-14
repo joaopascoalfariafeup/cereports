@@ -653,7 +653,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
     _fmt("Docentes doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
-    _fmt("Docentes integrados na carreira (ETI, esforço, não-convidados tempo integral)", "esforco_integrados_pct")
+    _fmt("Docentes integrados na carreira (ETI, esforço)", "esforco_integrados_pct")
     _fmt("Estudantes inscritos por docente (ETI esforço)", "estudantes_por_docente_eti", "", 1)
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
