@@ -2098,7 +2098,9 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                         else:
                             _print_url = PRINT_URL_12C.format(job.pv_id)
                         _ce_html_raw = _server_sess.fetch_html(_print_url, timeout=30)
+                        log.info(f"  CE print HTML: {len(_ce_html_raw)//1024} KB ({_print_url.split('?')[1]})")
                         _ce_ind = extrair_indicadores(_ce_html_raw)
+                        log.info(f"  CE indicadores: {_ce_ind}")
                         contexto_comparativo = formatar_indicadores_prompt(_agregados, _ce_tipo, _ce_ind)
                         log.concluir_fase("indicadores",
                             f"Indicadores de {_agregados['n_cursos']} ciclos de estudo agregados")
