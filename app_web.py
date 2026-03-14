@@ -2637,7 +2637,9 @@ def notificar_post(job_id: str):
           <p class="status-err">Código UP inválido: deve ter 5 a 9 dígitos numéricos.</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 400
-    notif_email = f"up{dest_codigo}@up.pt"
+    # Estudantes (20XXXXXXX) → @edu.up.pt; docentes → @up.pt
+    _dominio = "edu.up.pt" if re.match(r"^20\d{7,}$", dest_codigo) else "up.pt"
+    notif_email = f"up{dest_codigo}@{_dominio}"
 
     # Validar que o destinatário existe e tem permissão
     _dest_cargos = {}
