@@ -187,7 +187,10 @@ def extrair_indicadores(html: str) -> dict | None:
                 integrados_pct = _parse_num(spans[1].get_text(strip=True))
                 if integrados_eti is not None:
                     ind["docentes_integrados_eti"] = integrados_eti
-                    # Derivar total_eti quando "Estatística docente" não existe (3º ciclo)
+                    # Total para carreira = internos+externos (derivado da % do SIGARRA)
+                    if integrados_pct and integrados_pct > 0:
+                        ind["docentes_total_eti_carreira"] = integrados_eti / (integrados_pct / 100)
+                    # Derivar total_eti internos quando "Estatística docente" não existe (3º ciclo)
                     if "docentes_total_eti" not in ind and integrados_pct and integrados_pct > 0:
                         ind["docentes_total_eti"] = integrados_eti / (integrados_pct / 100)
                 # Docentes em unidades de investigação (colunas 5-6, só doutoramentos)
@@ -300,7 +303,8 @@ _SOMA_KEYS = [
     "procura_candidatos", "procura_vagas", "procura_colocados",
     "abandono_n", "abandono_inscritos",
     "feminino_n", "total_estudantes", "estrangeiros_n",
-    "docentes_total_eti", "docentes_doutorados_eti", "docentes_integrados_eti",
+    "docentes_total_eti", "docentes_total_eti_carreira",
+    "docentes_doutorados_eti", "docentes_integrados_eti",
     "docentes_investigacao_eti",
     "diplomados_total", "diplomados_no_tempo",
     "teses_n", "teses_soma_anos",
@@ -382,11 +386,11 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         "docentes_doutorados_pct": (somas["docentes_doutorados_eti"] / somas["docentes_total_eti"] * 100
                                     if contagens["docentes_doutorados_eti"] > 0 and somas["docentes_total_eti"] > 0
                                     else None),
-        "docentes_integrados_pct": (somas["docentes_integrados_eti"] / somas["docentes_total_eti"] * 100
-                                    if contagens["docentes_integrados_eti"] > 0 and somas["docentes_total_eti"] > 0
+        "docentes_integrados_pct": (somas["docentes_integrados_eti"] / somas["docentes_total_eti_carreira"] * 100
+                                    if contagens["docentes_integrados_eti"] > 0 and somas["docentes_total_eti_carreira"] > 0
                                     else None),
-        "docentes_investigacao_pct": (somas["docentes_investigacao_eti"] / somas["docentes_total_eti"] * 100
-                                      if contagens["docentes_investigacao_eti"] > 0 and somas["docentes_total_eti"] > 0
+        "docentes_investigacao_pct": (somas["docentes_investigacao_eti"] / somas["docentes_total_eti_carreira"] * 100
+                                      if contagens["docentes_investigacao_eti"] > 0 and somas["docentes_total_eti_carreira"] > 0
                                       else None),
         "eficiencia_formativa_pct": _ratio("diplomados_no_tempo", "diplomados_total"),
         "teses_media_anos": (somas["teses_soma_anos"] / somas["teses_n"]
@@ -503,6 +507,7 @@ def calcular_racios(ind: dict) -> dict:
 
     total_est = ind.get("total_estudantes")
     total_eti = ind.get("docentes_total_eti")
+    total_eti_carreira = ind.get("docentes_total_eti_carreira") or total_eti
 
     ab_n = ind.get("abandono_n")
     ab_ins = ind.get("abandono_inscritos")
@@ -516,8 +521,8 @@ def calcular_racios(ind: dict) -> dict:
     r["feminino_pct"] = _safe_div(ind.get("feminino_n"), total_est)
     r["estrangeiros_pct"] = _safe_div(ind.get("estrangeiros_n"), total_est)
     r["docentes_doutorados_pct"] = _safe_div(ind.get("docentes_doutorados_eti"), total_eti)
-    r["docentes_integrados_pct"] = _safe_div(ind.get("docentes_integrados_eti"), total_eti)
-    r["docentes_investigacao_pct"] = _safe_div(ind.get("docentes_investigacao_eti"), total_eti)
+    r["docentes_integrados_pct"] = _safe_div(ind.get("docentes_integrados_eti"), total_eti_carreira)
+    r["docentes_investigacao_pct"] = _safe_div(ind.get("docentes_investigacao_eti"), total_eti_carreira)
     r["eficiencia_formativa_pct"] = _safe_div(ind.get("diplomados_no_tempo"),
                                                ind.get("diplomados_total"))
     r["classif_media_saida"] = ind.get("classif_media_saida")
@@ -582,7 +587,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Género feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
     _fmt("Docentes internos doutorados (ETI, contrato)", "docentes_doutorados_pct")
-    _fmt("Docentes integrados na carreira (ETI)", "docentes_integrados_pct")
+    _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
     # Teses — média de anos para conclusão (só doutoramentos)
