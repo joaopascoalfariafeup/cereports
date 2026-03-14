@@ -253,6 +253,11 @@ Não repetir dados do relatório extensivamente — referir apenas o necessário
 - Começar diretamente com o texto do parecer.
 
 
+## Revisão do Parecer
+
+Verificar se as comparações estão corretas (double-check) e corrigir o que for necessário. 
+
+
 ## Exemplos de pareceres anteriores
 
 Seguem-se exemplos de pareceres emitidos para relatórios de anos anteriores do mesmo CE ou de CEs semelhantes, para calibrar tom e nível de detalhe.
