@@ -219,7 +219,7 @@ O parecer deve conter:
 
 1. **Frase introdutória** — identificar o CE e o ano letivo e apresentar uma apreciação global sintética (1–2 frases).
 
-2. **Aspetos positivos do relatório** — o que o DCE fez bem na análise SWOT e propostas, incluindo a cobertura adequada das dimensões relevantes para a perspetiva do parecer (2–4 pontos).
+2. **Aspetos positivos do relatório** — o que o DCE fez bem na análise SWOT e propostas, incluindo a cobertura adequada das dimensões relevantes para a perspetiva do parecer (2–4 pontos numerados).
    Se foram fornecidos pareceres anteriores e alguma das suas sugestões foi atendida, menciona-o aqui como ponto positivo.
 
 3. **Sugestões e recomendações** — aspetos que poderiam ser melhorados, incluindo:
@@ -229,7 +229,7 @@ O parecer deve conter:
    - propostas insuficientes ou pouco acionáveis
    - se foram fornecidos pareceres anteriores: questões recorrentes que voltam a surgir sem progresso visível (incluir como recomendação reiterada)
 
-   (2–6 pontos)
+   (2–6 pontos numerados)
 
 4. **Conclusão** — apreciação final (favorável / favorável com reservas / desfavorável) com justificação breve (1–2 frases).
 
