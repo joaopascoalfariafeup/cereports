@@ -395,6 +395,7 @@ def analisar_relatorio_ce(
     pareceres_anteriores: str | None = None,
     perspetiva: str = "",
     instrucoes: str = "",
+    contexto_comparativo: str = "",
 ) -> str:
     """Envia o HTML do relatório de CE ao LLM e devolve o parecer em HTML.
 
@@ -435,6 +436,8 @@ def analisar_relatorio_ce(
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"
             f"{pareceres_anteriores}"
         )
+    if contexto_comparativo:
+        user_text += f"\n\n{contexto_comparativo}"
 
     max_tokens = 4096
     max_retries = int(os.environ.get("LLM_MAX_RETRIES", "3") or "3")

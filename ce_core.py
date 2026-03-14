@@ -28,6 +28,7 @@ def analisar_ce(
     pareceres_anteriores: str | None = None,
     perspetiva: str = "",
     instrucoes: str = "",
+    contexto_comparativo: str = "",
 ) -> dict:
     """Pipeline de análise de um CE: HTML relatório → LLM → preview_payload.
 
@@ -64,6 +65,7 @@ def analisar_ce(
             pareceres_anteriores=pareceres_anteriores,
             perspetiva=perspetiva,
             instrucoes=instrucoes,
+            contexto_comparativo=contexto_comparativo,
         )
         custo_post = logger.total_custo_estimado() or 0.0
         custo_str = f" [~${custo_post - custo_pre:.4f}]" if custo_post > custo_pre else ""
@@ -96,6 +98,8 @@ def analisar_ce(
             f"\n\n## Pareceres emitidos no relatório do ano letivo anterior\n\n"
             f"{pareceres_anteriores}"
         )
+    if contexto_comparativo:
+        user_prompt_txt += f"\n\n{contexto_comparativo}"
     user_prompt_txt += (
         f"\n\n## Conteúdo do relatório (HTML)\n\n"
         f"[ver relatorio_ce.html — {len(relatorio_html) // 1024} KB]"

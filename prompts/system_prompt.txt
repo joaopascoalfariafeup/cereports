@@ -141,6 +141,18 @@ Identifica os principais indicadores do CE, incluindo quando disponíveis:
 
 Não é necessário reproduzir todos os valores numéricos com exatidão. O objetivo é identificar **tendências e aspetos relevantes**.
 
+### 1b. Contextualizar com indicadores comparativos (se disponíveis)
+
+Se a prompt do utilizador incluir uma secção `## Indicadores comparativos`, compara os indicadores do CE em análise com os valores agregados de todos os cursos do mesmo nível (licenciatura, mestrado ou doutoramento) da FEUP. Os valores agregados foram calculados como rácios de somas (pesados pela dimensão de cada curso).
+
+Para cada indicador relevante:
+- Identifica se o CE está **acima, abaixo ou em linha** com o valor agregado.
+- Dá particular atenção a **desvios significativos** (por exemplo, taxa de abandono muito acima da média do nível, ou internacionalização muito abaixo).
+- Utiliza esta comparação para distinguir **problemas específicos do CE** de **questões transversais ao nível**.
+- Quando o DCE identificar algo como ponto forte ou fraco, verifica se isso é específico do CE ou se é comum a todos os cursos do mesmo nível.
+
+Inclui referências comparativas no parecer quando acrescentam valor (por exemplo: "a taxa de abandono de 25% está significativamente acima da média das licenciaturas FEUP de 12%"), mas sem transformar o parecer numa lista de comparações.
+
 
 ### 2. Fazer uma análise SWOT própria
 
