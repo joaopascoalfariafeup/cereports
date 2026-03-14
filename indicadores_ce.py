@@ -457,7 +457,7 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         "ipup_mediana_global": ipup_sum / ipup_w if ipup_w > 0 else None,
         "ipup_taxa_preenchimento": ipup_taxa_sum / ipup_taxa_w if ipup_taxa_w > 0 else None,
         "sumarios_pct": sumarios_sum / sumarios_n if sumarios_n > 0 else None,
-        "empregabilidade_area_pct": empreg_sum / empreg_n if empreg_n > 0 else None,
+        "empregabilidade_area_pct": empreg_sum / empreg_n if empreg_n >= 3 else None,
     }
 
 
@@ -645,7 +645,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Taxa de abandono", "abandono_pct")
     _fmt("Género feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
-    _fmt("Docentes doutorados (ETI, internos+externos, contrato)", "docentes_doutorados_pct")
+    _fmt("Docentes doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
     _fmt("Docentes integrados na carreira (ETI, esforço, não-convidados tempo integral)", "esforco_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
