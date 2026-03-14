@@ -116,7 +116,7 @@ def extrair_indicadores(html: str) -> dict | None:
         v = _last_col_value(t, r"N.*Colocados$")
         if v:
             ind["procura_colocados"] = _parse_count(v)
-        v = _last_col_value(t, r"Nota m.dia de entrada")
+        v = _last_col_value(t, r"Nota m.+dia de entrada")
         if v:
             ind["nota_media_entrada"] = _parse_num(v)
 
@@ -162,7 +162,7 @@ def extrair_indicadores(html: str) -> dict | None:
                 ind["total_estudantes"] = nat_total
 
     # --- Estatística docente (linha "Contrato") ---
-    t = _find_table_after_h3(soup, r"Estat.stica docente")
+    t = _find_table_after_h3(soup, r"Estat.+stica docente")
     if t:
         for tr in t.find_all("tr"):
             spans = tr.find_all("span", class_="relcur_table")
@@ -253,7 +253,7 @@ def extrair_indicadores(html: str) -> dict | None:
         ind["esforco_total_eti"] = total_esforco_ce
 
     # --- Eficiência formativa (última coluna) ---
-    t = _find_table_after_h3(soup, r"Efici.ncia formativa")
+    t = _find_table_after_h3(soup, r"Efici.+ncia formativa")
     if t:
         v = _last_col_value(t, r"N.*diplomados$")
         if v:
@@ -262,13 +262,13 @@ def extrair_indicadores(html: str) -> dict | None:
         v = _last_col_value(t, r"N.*diplomados em \d")
         if v:
             ind["diplomados_no_tempo"] = _parse_count(v)
-        v = _last_col_value(t, r"Classifica..o m.dia")
+        v = _last_col_value(t, r"Classifica.+o m.+dia")
         if v:
             ind["classif_media_saida"] = _parse_num(v)
 
     # --- Aprovação 1º ano, 1ª vez (primeira tabela após h3) ---
     for h3 in soup.find_all("h3"):
-        if re.search(r"aprova..o.*1.*ano", h3.get_text(strip=True), re.I):
+        if re.search(r"aprova.+o.*1.*ano", h3.get_text(strip=True), re.I):
             table = h3.find_next("table")
             if table:
                 v = _last_col_value(table, r"Total de inscritos.*1.*vez")
@@ -280,7 +280,7 @@ def extrair_indicadores(html: str) -> dict | None:
             break
 
     # --- Inquéritos Pedagógicos (IPUP) ---
-    t = _find_table_after_h3(soup, r"Inqu.ritos Pedag.gicos")
+    t = _find_table_after_h3(soup, r"Inqu.+ritos Pedag.+gicos")
     if t:
         medianas: list[float] = []
         taxa_vals: list[float] = []
@@ -306,7 +306,7 @@ def extrair_indicadores(html: str) -> dict | None:
             ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
 
     # --- Preenchimento de sumários ---
-    t = _find_table_after_h3(soup, r"Preenchimento dos sum.rios")
+    t = _find_table_after_h3(soup, r"Preenchimento dos sum.+rios")
     if t:
         last_vals: list[float] = []
         for tr in t.find_all("tr"):
