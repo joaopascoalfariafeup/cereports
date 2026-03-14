@@ -232,6 +232,7 @@ O parecer deve conter:
    - se foram fornecidos pareceres anteriores: questões recorrentes que voltam a surgir sem progresso visível (incluir como recomendação reiterada)
 
    (título de secção seguido de 2–4 pontos numerados, com prioridade para os pontos mais relacionados com a perspetiva do parecer)
+   (no caso de auto-avalição, podem ser 2-6 pontos)
 
 4. **Conclusão** — apreciação final (favorável / favorável com reservas / desfavorável) com justificação breve (1–2 frases).
 
