@@ -485,7 +485,7 @@ def calcular_racios(ind: dict) -> dict:
     comparação directa entre CE e agregado.
     """
     def _safe_div(num, den, scale=100):
-        return num / den * scale if den and den > 0 else None
+        return num / den * scale if num is not None and den and den > 0 else None
 
     total_est = ind.get("total_estudantes")
     total_eti = ind.get("docentes_total_eti")

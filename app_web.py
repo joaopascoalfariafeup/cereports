@@ -2105,7 +2105,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                     else:
                         log.concluir_fase("indicadores", "Dados insuficientes", ok=False)
             except Exception as e:
-                log.info(f"  Indicadores comparativos: erro ({e})")
+                log.concluir_fase("indicadores", f"Erro: {e}", ok=False)
 
             # Fase 2 — análise por LLM (logada internamente por analisar_ce)
             analisar_ce(
