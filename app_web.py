@@ -2594,7 +2594,7 @@ def submissao_get(job_id: str):
           <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
           <div class="row" style="align-items:center;gap:10px;max-width:420px;">
             <label style="min-width:80px;">Email UP:</label>
-            <input name="notif_email" type="email" placeholder="upNNNNNN@up.pt"
+            <input name="notif_email" type="email" placeholder="upXXXXXX@up.pt ou upXXXXXXXXX@edu.fe.up.pt"
                    pattern="up\\d{{6,9}}@(?:[\\w-]+\\.)*up\\.pt"
                    title="Email institucional UP (up seguido de número)"
                    style="flex:1;" required>
@@ -2631,7 +2631,7 @@ def notificar_post(job_id: str):
     if not _m:
         return _page("Notificação", f"""
         <div class="card">
-          <p class="status-err">Email inválido: deve ter o formato <code>upNNNNNN@up.pt</code>.</p>
+          <p class="status-err">Email inválido: deve ter o formato <code>upXXXXXX@up.pt</code> ou <code>upXXXXXXXXX@edu.fe.up.pt</code> (email UP com código numérico).</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 400
     dest_codigo = _m.group(1)
