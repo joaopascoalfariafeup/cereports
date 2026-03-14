@@ -1238,13 +1238,21 @@ def home():
 
 @app.get("/login")
 def login():
-    csrf = _get_csrf_token()
-    _alt_links = []
     if _oidc_config()["client_id"]:
-        _alt_links.append(f'Ou <a href="{url_for("login_oidc")}">Autenticação federada</a>')
-    _alt_logins_html = "".join(
-        f'<p style="margin:10px 0 0;font-size:0.9em;">{l}</p>' for l in _alt_links
-    )
+        # Autenticação federada disponível — ecrã simplificado
+        body = f"""
+        <div class="card">
+          <p>Autenticação via identidade federada da Universidade do Porto.</p>
+          <div class="row" style="margin-top:14px;">
+            <a href="{url_for('login_oidc')}" class="button" style="display:inline-block;padding:8px 20px;text-decoration:none;">Autenticar</a>
+          </div>
+          <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
+        </div>
+        """
+        return _page("Login", body)
+
+    # Fallback: login por password (OIDC não configurado)
+    csrf = _get_csrf_token()
     body = f"""
     <div class="card">
       <form id="login-form" method="post" action="{url_for('login_post')}">
@@ -1261,8 +1269,7 @@ def login():
           <button id="btn-login" type="submit">Autenticar</button>
         </div>
       </form>
-      {_alt_logins_html}
-<p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
+      <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
     </div>
     """
     return _page("Login no SIGARRA", body)
@@ -1308,21 +1315,11 @@ def privacidade():
 
       <h4>Autenticação e comunicação segura</h4>
       <p>
-        A aplicação suporta dois métodos de autenticação, todos protegidos por HTTPS/TLS:
+        A autenticação é efetuada através do sistema de identidade federada da Universidade do Porto
+        (open-id.up.pt), protegida por HTTPS/TLS. As credenciais do utilizador nunca são
+        transmitidas a esta aplicação. A sessão SIGARRA necessária para aceder aos relatórios
+        é estabelecida através de uma conta de servidor institucional.
       </p>
-      <ul>
-        <li>
-          <b>Login SIGARRA (utilizador e senha):</b> as credenciais são transmitidas pelo servidor
-          desta aplicação para a API do SIGARRA para estabelecer uma sessão autenticada.
-          As credenciais não são guardadas em disco nem registadas em logs.
-        </li>
-        <li>
-          <b>Autenticação federada UP (Keycloak/SAML):</b> o utilizador autentica-se através do
-          sistema de identidade federada da Universidade do Porto (open-id.up.pt), sem que as
-          credenciais sejam transmitidas a esta aplicação. A sessão SIGARRA é estabelecida através
-          de uma conta de servidor com acesso aos relatórios de ciclos de estudos.
-        </li>
-      </ul>
 
       <h4>Dados acedidos pela aplicação</h4>
       <p>
