@@ -2592,7 +2592,7 @@ def submissao_get(job_id: str):
         <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
         <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
           <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-          <div class="row" style="align-items:center;gap:10px;max-width:420px;">
+          <div class="row" style="align-items:center;gap:10px;max-width:560px;">
             <label style="min-width:80px;">Email UP:</label>
             <input name="notif_email" type="email" placeholder="upXXXXXX@up.pt ou upXXXXXXXXX@edu.fe.up.pt"
                    pattern="up\\d{{6,9}}@(?:[\\w-]+\\.)*up\\.pt"
@@ -2636,11 +2636,23 @@ def notificar_post(job_id: str):
         </div>"""), 400
     dest_codigo = _m.group(1)
 
-    # Validar que o destinatário tem permissão (ou é admin)
-    if not _is_admin(sess) and not _reviewer_tem_permissao(dest_codigo, job.cur_id, job.perspetiva):
+    # Validar que o destinatário existe e tem permissão
+    _dest_cargos = {}
+    try:
+        server_sess = _get_server_session()
+        _dest_cargos = obter_cargos_docente(server_sess, dest_codigo)
+    except Exception:
+        pass
+    if not _dest_cargos.get("nome"):
         return _page("Notificação", f"""
         <div class="card">
-          <p class="status-err">O destinatário não tem cargo que permita emitir parecer de
+          <p class="status-err">Não foi possível encontrar o utilizador com código {_esc(dest_codigo)} no SIGARRA.</p>
+          <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
+        </div>"""), 400
+    if not _reviewer_tem_permissao(dest_codigo, job.cur_id, job.perspetiva):
+        return _page("Notificação", f"""
+        <div class="card">
+          <p class="status-err">{_esc(_dest_cargos.get('nome', dest_codigo))} não tem cargo que permita emitir parecer de
           {_esc((job.perspetiva or "").upper())} para este ciclo de estudos.</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 403
