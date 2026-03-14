@@ -651,7 +651,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
 
     _procura_label = ("Rácio candidatos 1ª opção/vagas"
                        if nivel.upper() == "L" else "Rácio candidatos/vagas")
-    _fmt(_procura_label, "procura_ratio", "x")
+    _fmt(_procura_label, "procura_ratio", "x", 2)
     if nivel.upper() == "L":
         _fmt("Nota média de entrada (pesada por nº colocados)", "nota_media_entrada", " pontos")
     _fmt("Taxa de abandono", "abandono_pct")
