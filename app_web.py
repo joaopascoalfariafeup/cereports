@@ -1242,10 +1242,7 @@ def login():
         # Autenticação federada disponível — ecrã simplificado
         body = f"""
         <div class="card">
-          <p>Autenticação via identidade federada da Universidade do Porto.</p>
-          <div class="row" style="margin-top:14px;">
-            <a href="{url_for('login_oidc')}" class="button" style="display:inline-block;padding:8px 20px;text-decoration:none;">Autenticar</a>
-          </div>
+          <p><a href="{url_for('login_oidc')}">Autenticação federada UP</a></p>
           <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
         </div>
         """
