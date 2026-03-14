@@ -2444,7 +2444,7 @@ def preview(job_id: str):
     csrf = _get_csrf_token()
 
     _link_relatorio = (
-        f'<a href="{_relatorio_url}" target="_blank" rel="noopener">Ver relatório no SIGARRA</a>'
+        f'<a href="{_relatorio_url}" target="_blank" rel="noopener">Ver relatório no SIGARRA ↗</a>'
         if _relatorio_url else ""
     )
 
@@ -2597,11 +2597,11 @@ def submissao_get(job_id: str):
         <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
         <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
           <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-          <div class="row" style="align-items:center;gap:10px;max-width:560px;">
-            <label style="min-width:80px;">Email UP:</label>
-            <input name="notif_email" type="email" placeholder="upXXXXXX@up.pt ou upXXXXXXXXX@edu.fe.up.pt"
-                   pattern="up\\d{{6,9}}@(?:[\\w-]+\\.)*up\\.pt"
-                   title="Email institucional UP (up seguido de número)"
+          <div class="row" style="align-items:center;gap:10px;max-width:400px;">
+            <label style="min-width:90px;">Código UP:</label>
+            <input name="notif_codigo" type="text" placeholder="ex: 210006 ou 201606486"
+                   pattern="\\d{{5,9}}"
+                   title="Código numérico UP (5 a 9 dígitos)"
                    style="flex:1;" required>
             <button type="submit">Notificar</button>
           </div>
@@ -2630,16 +2630,14 @@ def notificar_post(job_id: str):
         if not job or not _is_job_owner(job, sess):
             abort(403)
 
-    notif_email = request.form.get("notif_email", "").strip().lower()
-    # Extrair código do email UP
-    _m = re.match(r"^up(\d{6,9})@(?:[\w-]+\.)*up\.pt$", notif_email)
-    if not _m:
+    dest_codigo = request.form.get("notif_codigo", "").strip()
+    if not re.match(r"^\d{5,9}$", dest_codigo):
         return _page("Notificação", f"""
         <div class="card">
-          <p class="status-err">Email inválido: deve ter o formato <code>upXXXXXX@up.pt</code> ou <code>upXXXXXXXXX@edu.fe.up.pt</code> (email UP com código numérico).</p>
+          <p class="status-err">Código UP inválido: deve ter 5 a 9 dígitos numéricos.</p>
           <p><a href="{url_for('submissao_get', job_id=job_id)}">Voltar</a></p>
         </div>"""), 400
-    dest_codigo = _m.group(1)
+    notif_email = f"up{dest_codigo}@up.pt"
 
     # Validar que o destinatário existe e tem permissão
     _dest_cargos = {}
