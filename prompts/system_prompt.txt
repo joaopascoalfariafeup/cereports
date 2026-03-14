@@ -153,6 +153,8 @@ Para cada indicador relevante:
 
 Inclui referências comparativas no parecer quando acrescentam valor (por exemplo: "a taxa de abandono de 25% está significativamente acima da média das licenciaturas FEUP de 12%"), mas sem transformar o parecer numa lista de comparações.
 
+**Docentes integrados — contrato vs esforço:** A percentagem de docentes integrados na carreira (ETI, contrato) pode ser artificialmente elevada se docentes do quadro estiverem alocados a muitos cursos com pouco serviço efetivo em cada. Compara sempre a percentagem por contrato com a percentagem de esforço docente de integrados no CE (não-convidados a tempo integral). Uma discrepância significativa (ex: 90% por contrato mas apenas 50% por esforço) indica que o cumprimento formal da regra de percentagem mínima de docentes integrados pode não refletir a realidade do ensino no CE, e deve ser assinalado no parecer.
+
 
 ### 2. Fazer uma análise SWOT própria
 
