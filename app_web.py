@@ -1242,7 +1242,7 @@ def login():
         # Autenticação federada disponível — ecrã simplificado
         body = f"""
         <div class="card">
-          <p><a href="{url_for('login_oidc')}">Autenticação federada UP</a></p>
+          <p><a href="{url_for('login_oidc')}">Autenticação Federada U.Porto</a></p>
           <p class="muted" style="margin-top:10px;"><a href="{url_for('privacidade')}">Política de privacidade e proteção de dados</a></p>
         </div>
         """

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(py -c \"import ast; ast.parse\\(open\\(''app_web.py''\\).read\\(\\)\\); ast.parse\\(open\\(''sigarra.py''\\).read\\(\\)\\); print\\(''OK''\\)\")"
+      "Bash(py -c \"import ast; ast.parse\\(open\\(''app_web.py''\\).read\\(\\)\\); ast.parse\\(open\\(''sigarra.py''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "Bash(py -c \"import ast; ast.parse\\(open\\(''app_web.py''\\).read\\(\\)\\); print\\(''ok''\\)\")",
+      "Read(//c/Users/jpf/Downloads/parecer_mestrado-em-engenharia-de-software_2024-25 \\(2\\)/**)",
+      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''sigarra_ce.py'', doraise=True\\); py_compile.compile\\(''app_web.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''sigarra_ce.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Bash(py -3 -c \"import py_compile; py_compile.compile\\(''app_web.py'', doraise=True\\); print\\(''OK''\\)\")"
     ]
   }
 }
