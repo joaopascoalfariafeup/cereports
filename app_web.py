@@ -2497,6 +2497,7 @@ def preview(job_id: str):
     <div class="card">
       {_ce_titulo_html(ce_nome, ano_letivo, job.perspetiva)}
       <div class="muted">Parecer gerado — reveja e edite conforme necessário.</div>
+      <div class="muted">Note que os conteúdos gerados por modelos de IA podem conter imprecisões.</div>
       {(f'<p>{_link_relatorio}</p>') if _link_relatorio else ""}
     </div>
 
