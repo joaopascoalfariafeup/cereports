@@ -394,33 +394,37 @@ def _obter_membros_ca(sess: SigarraSession, cur_id: str) -> list[dict]:
     return membros
 
 
-def obter_diretor_curso(sess: SigarraSession, cur_id: str) -> str:
-    """Obtém o código do diretor de curso a partir de cur_geral.cur_view.
+def obter_diretores_curso(sess: SigarraSession, cur_id: str) -> list[str]:
+    """Obtém códigos do diretor, codiretor e diretor adjunto de um curso.
 
-    Returns código pessoal ou "" se não encontrado.
+    Faz scraping de cur_geral.cur_view?pv_curso_id=NNN.
+    Returns lista de códigos pessoais (pode estar vazia).
     """
     url = f"{SIGARRA_BASE}/cur_geral.cur_view?pv_curso_id={cur_id}"
     try:
         html_str = sess.fetch_html(url, timeout=15)
     except Exception:
-        return ""
+        return []
 
     soup = BeautifulSoup(html_str, "html.parser")
-    # Procura label "Diretor" / "Diretora" (excluindo "Adjunto") numa tabela
-    # e extrai o código do link (dois padrões de URL no SIGARRA):
+    # Procura labels "Diretor", "Codiretor", "Diretor Adjunto" numa tabela
+    # e extrai códigos dos links (dois padrões de URL no SIGARRA):
     #   func_geral.formview?p_codigo=NNN
     #   vld_entidades_geral.entidade_pagina?pct_codigo=NNN
     _RE_CODIGO = re.compile(r"(?:p_codigo|pct_codigo)=(\d+)", re.I)
+    codigos: list[str] = []
+    vistos: set[str] = set()
     for label_el in soup.find_all(["th", "td"]):
         label_text = label_el.get_text(strip=True).lower()
-        if re.search(r"\bdiret", label_text) and "adjunt" not in label_text:
+        if re.search(r"\bdiret|\bcodiret", label_text):
             row = label_el.find_parent("tr")
             if row:
                 for a in row.find_all("a", href=True):
                     m = _RE_CODIGO.search(a.get("href", ""))
-                    if m:
-                        return m.group(1)
-    return ""
+                    if m and m.group(1) not in vistos:
+                        vistos.add(m.group(1))
+                        codigos.append(m.group(1))
+    return codigos
 
 
 def listar_membros_orgao(sess: SigarraSession, perspetiva: str, cur_id: str = "") -> list[dict]:

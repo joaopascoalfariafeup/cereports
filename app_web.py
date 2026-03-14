@@ -35,7 +35,7 @@ from flask_limiter.util import get_remote_address
 from sigarra import SigarraSession, load_env
 from logger import AuditoriaLogger
 from ce_core import analisar_ce
-from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra, obter_parecer_atual_sigarra, listar_membros_orgao, obter_diretor_curso
+from sigarra_ce import listar_ces_publicos, listar_relatorios_ce, obter_relatorio_ce_html, obter_cargos_docente, obter_pareceres_ano_anterior, submeter_parecer_sigarra, obter_parecer_atual_sigarra, listar_membros_orgao, obter_diretores_curso
 
 
 # Carregar .env antes de ler variáveis WEB_* no arranque do módulo
@@ -2596,9 +2596,8 @@ def submissao_get(job_id: str):
         _excluir: set[str] = set()
         _excluir.add(_effective_codigo(sess))
         try:
-            _dir_code = obter_diretor_curso(_get_server_session(), job.cur_id)
-            if _dir_code:
-                _excluir.add(_dir_code)
+            _dir_codes = obter_diretores_curso(_get_server_session(), job.cur_id)
+            _excluir.update(_dir_codes)
         except Exception:
             pass
         try:
