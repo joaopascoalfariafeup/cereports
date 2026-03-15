@@ -2641,18 +2641,19 @@ def submissao_get(job_id: str):
                 for m in _membros
             )
             _notif_html = f"""
-            <hr style="margin:20px 0;">
-            <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
-            <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
-              <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-              <div class="row" style="align-items:center;gap:10px;max-width:500px;flex-wrap:nowrap;">
-                <select name="notif_codigo" style="flex:1;min-width:0;" required>
-                  <option value="">— selecionar —</option>
-                  {_options}
-                </select>
-                <button type="submit">Notificar</button>
-              </div>
-            </form>"""
+            <details style="margin-top:14px;">
+              <summary style="cursor:pointer; color:#555; font-size:0.93em;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</summary>
+              <form method="post" action="{url_for('notificar_post', job_id=job_id)}" style="margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
+                <div class="row" style="align-items:center;gap:10px;max-width:500px;flex-wrap:nowrap;">
+                  <select name="notif_codigo" style="flex:1;min-width:0;" required>
+                    <option value="">— selecionar —</option>
+                    {_options}
+                  </select>
+                  <button type="submit">Notificar</button>
+                </div>
+              </form>
+            </details>"""
 
     body = f"""
     <div class="card">
