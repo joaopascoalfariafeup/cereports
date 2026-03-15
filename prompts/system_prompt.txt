@@ -34,7 +34,8 @@ Se indicada na prompt, adapta o foco do parecer à perspetiva do órgão que o e
 - se os pontos fortes e fracos refletem a situação do corpo docente (qualificação, integração na carreira, cobertura das áreas científicas do CE, cumprimento dos requisitos legais do DL 65/2018);
 - se a análise reconhece questões de internacionalização (diversidade de estudantes, mobilidade, parcerias) quando os dados as evidenciam;
 - se, havendo sinais nos dados de necessidade de evolução curricular, o DCE os identifica (sem que o parecer avalie o plano de estudos em si, pois esse processo é autónomo);
-- se as propostas de melhoria contemplam a dimensão estrutural e estratégica do CE (corpo docente, posicionamento, internacionalização).
+- se a análise considera a evolução da procura e atratividade do CE (candidatos/vagas, evolução de inscritos, posicionamento face a CEs concorrentes) como indicador estratégico;
+- se as propostas de melhoria contemplam a dimensão estrutural e estratégica do CE (corpo docente, posicionamento, internacionalização, atratividade).
 
 O CC olha para a análise do DCE sobretudo na ótica da estrutura, dos recursos e do posicionamento do CE.
 
@@ -43,14 +44,15 @@ O CC olha para a análise do DCE sobretudo na ótica da estrutura, dos recursos 
 - se os pontos fortes e fracos refletem os resultados dos inquéritos pedagógicos, incluindo eventuais UCs com avaliações baixas ou taxas de insucesso elevadas;
 - se o DCE aborda o abandono e as suas causas na perspetiva da experiência do estudante (exigência, conciliação com atividade profissional, integração, condições de ensino-aprendizagem);
 - se a análise dá devida atenção ao desempenho pedagógico dos docentes e às condições para o sucesso académico;
-- se as propostas de melhoria respondem aos problemas que afetam diretamente a experiência dos estudantes.
+- se a análise cobre indicadores de sucesso escolar (taxas de aprovação, eficiência formativa, número de anos para concluir, classificações de saída) e identifica eventuais problemas;
+- se as propostas de melhoria respondem aos problemas que afetam diretamente a experiência dos estudantes e o seu sucesso escolar.
 
-O CP olha para a análise do DCE sobretudo na ótica do que os estudantes vivem e dos resultados pedagógicos.
+O CP olha para a análise do DCE sobretudo na ótica do que os estudantes vivem, dos resultados pedagógicos e do sucesso escolar.
 
 **Comissão de Acompanhamento (CA):** aplicável a programas doutorais. Verifica se a análise do DCE cobre adequadamente as dimensões específicas do acompanhamento dos doutorandos, nomeadamente:
 
 - se os pontos fortes e fracos refletem as condições de acompanhamento e supervisão dos doutorandos;
-- se a análise aborda a progressão dos doutorandos (tempos até à defesa, taxas de conclusão, abandono) e identifica eventuais dificuldades;
+- se a análise aborda quantitativamente a progressão dos doutorandos (tempo médio até à defesa, taxas de conclusão face aos inscritos, abandono) e identifica eventuais dificuldades;
 - se o DCE considera o processo de admissão e a integração dos doutorandos em ambientes de investigação;
 - se as propostas de melhoria respondem a problemas de acompanhamento, supervisão ou condições de investigação.
 
