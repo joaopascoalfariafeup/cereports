@@ -301,7 +301,8 @@ def extrair_indicadores(html: str) -> dict | None:
     # --- Inquéritos Pedagógicos (IPUP) ---
     t = _find_table_after_h3(soup, r"Inqu.+ritos Pedag.+gicos")
     if t:
-        medianas: list[float] = []
+        # medianas_por_ano[i] = lista de medianas (dimensões) do ano curricular i
+        medianas_por_ano: dict[int, list[float]] = {}
         taxa_vals: list[float] = []
         for tr in t.find_all("tr"):
             td_k = tr.find("td", class_="k")
@@ -315,24 +316,45 @@ def extrair_indicadores(html: str) -> dict | None:
                     if v is not None:
                         taxa_vals.append(v)
             else:
-                for s in spans:
+                for i, s in enumerate(spans):
                     v = _parse_num(s.get_text(strip=True))
                     if v is not None:
-                        medianas.append(v)
-        if medianas:
-            ind["ipup_mediana_global"] = sum(medianas) / len(medianas)
+                        medianas_por_ano.setdefault(i, []).append(v)
+
+        # Média da mediana por ano curricular
+        media_por_ano = {i: sum(vs) / len(vs) for i, vs in medianas_por_ano.items() if vs}
+        n_anos = len(media_por_ano)
+
+        # Pesos = nº estimado de respostas por ano (taxa% * nº estudantes / 100)
+        pode_pesar = (estudantes_por_ano
+                      and len(estudantes_por_ano) >= n_anos
+                      and len(taxa_vals) >= n_anos)
+        if pode_pesar:
+            respostas_por_ano = [taxa_vals[i] * estudantes_por_ano[i] / 100
+                                 for i in range(n_anos)]
+            total_respostas = sum(respostas_por_ano)
+        else:
+            respostas_por_ano = []
+            total_respostas = 0
+
+        if media_por_ano:
+            if total_respostas > 0:
+                ind["ipup_mediana_global"] = sum(
+                    media_por_ano[i] * respostas_por_ano[i] for i in range(n_anos)
+                ) / total_respostas
+            else:
+                # Fallback: média simples dos anos
+                ind["ipup_mediana_global"] = sum(media_por_ano.values()) / n_anos
+
         if taxa_vals:
-            # Média pesada pelo nº de estudantes por ano, se disponível
-            if estudantes_por_ano and len(estudantes_por_ano) == len(taxa_vals):
-                total_est_ano = sum(estudantes_por_ano)
-                if total_est_ano > 0:
-                    ind["ipup_taxa_preenchimento"] = sum(
-                        t * n for t, n in zip(taxa_vals, estudantes_por_ano)
-                    ) / total_est_ano
-                else:
-                    ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
+            if total_respostas > 0:
+                ind["ipup_taxa_preenchimento"] = total_respostas / sum(estudantes_por_ano[:n_anos]) * 100
             else:
                 ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
+
+        # Nº estimado de respostas IPUP (peso para agregação entre cursos)
+        if total_respostas > 0:
+            ind["ipup_respostas_est"] = total_respostas
 
     # --- Preenchimento de sumários ---
     t = _find_table_after_h3(soup, r"Preenchimento dos sum.+rios")
@@ -424,14 +446,14 @@ def _agregar_indicadores(lista: list[dict]) -> dict:
         if ind.get("classif_media_saida") and d > 0:
             classif_sum += ind["classif_media_saida"] * d
             classif_w += d
-        # IPUP pesada por nº estudantes
-        n_est = ind.get("total_estudantes") or 0
-        if ind.get("ipup_mediana_global") and n_est > 0:
-            ipup_sum += ind["ipup_mediana_global"] * n_est
-            ipup_w += n_est
-        if ind.get("ipup_taxa_preenchimento") and n_est > 0:
-            ipup_taxa_sum += ind["ipup_taxa_preenchimento"] * n_est
-            ipup_taxa_w += n_est
+        # IPUP pesada por nº estimado de respostas (fallback: nº estudantes)
+        n_resp = ind.get("ipup_respostas_est") or ind.get("total_estudantes") or 0
+        if ind.get("ipup_mediana_global") and n_resp > 0:
+            ipup_sum += ind["ipup_mediana_global"] * n_resp
+            ipup_w += n_resp
+        if ind.get("ipup_taxa_preenchimento") and n_resp > 0:
+            ipup_taxa_sum += ind["ipup_taxa_preenchimento"] * n_resp
+            ipup_taxa_w += n_resp
         # Sumários — média simples entre cursos
         if ind.get("sumarios_pct") is not None:
             sumarios_sum += ind["sumarios_pct"]
