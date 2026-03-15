@@ -856,7 +856,22 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
                     tr_d.append(td)
                 new_table.append(tr_d)
             if totais_row:
-                new_table.append(totais_row.extract())
+                # Reconstruir Totais para alinhar com novas colunas
+                tds_orig = totais_row.find_all("td")
+                # tds_orig: [Totais, #N(colspan=4), regime, esforço_ce, esforço_sem_ot]
+                n_total = len(data_rows)
+                regime_total = tds_orig[2].get_text(strip=True) if len(tds_orig) >= 3 else ""
+                esforco_ce_total = tds_orig[3].get_text(strip=True) if len(tds_orig) >= 4 else ""
+                esforco_ot_total = tds_orig[4].get_text(strip=True) if len(tds_orig) >= 5 else ""
+                tr_t = soup.new_tag("tr")
+                td_label = soup.new_tag("td", colspan="3")
+                td_label.string = "Totais"
+                tr_t.append(td_label)
+                for val in [str(n_total), regime_total, esforco_ce_total, esforco_ot_total]:
+                    td = soup.new_tag("td")
+                    td.string = val
+                    tr_t.append(td)
+                new_table.append(tr_t)
             table.replace_with(new_table)
 
     # 3. Limpar atributos: manter apenas colspan/rowspan em células de tabela
