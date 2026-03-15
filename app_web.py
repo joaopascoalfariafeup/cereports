@@ -2341,7 +2341,6 @@ def progress(job_id: str):
               <a class="btn" href="{url_for('preview', job_id=job_id)}">Rever parecer</a>
             </div>
             <div class="navbar-right">
-              <a class="muted" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
               <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
             </div>
           </div>
@@ -2350,11 +2349,7 @@ def progress(job_id: str):
     elif job.done:
         body += f"""
         <div class="card">
-          <p>
-            <a class="muted" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
-            &nbsp;&nbsp;
-            <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
-          </p>
+          <p><a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a></p>
         </div>
         """
 
