@@ -2341,6 +2341,7 @@ def progress(job_id: str):
               <a class="btn" href="{url_for('preview', job_id=job_id)}">Rever parecer</a>
             </div>
             <div class="navbar-right">
+              <a class="muted" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
               <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
             </div>
           </div>
@@ -2349,7 +2350,11 @@ def progress(job_id: str):
     elif job.done:
         body += f"""
         <div class="card">
-          <p><a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a></p>
+          <p>
+            <a class="muted" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+            &nbsp;&nbsp;
+            <a class="muted" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+          </p>
         </div>
         """
 
@@ -2526,7 +2531,8 @@ def preview(job_id: str):
         {_aviso_existente}
         <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           {_btn_submeter}
-          <a style="margin-left:auto;font-size: 13px;color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+          <a style="margin-left:auto;font-size: 13px;color:var(--muted);text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+          <a style="font-size: 13px;color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
     </form>
