@@ -2644,7 +2644,6 @@ def submissao_get(job_id: str):
             <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
               <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
               <div class="row" style="align-items:center;gap:10px;max-width:500px;">
-                <label style="min-width:70px;">Membro:</label>
                 <select name="notif_codigo" style="flex:1;" required>
                   <option value="">— selecionar —</option>
                   {_options}
@@ -2661,7 +2660,9 @@ def submissao_get(job_id: str):
       {_notif_html}
       <p style="margin-top:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <a href="{url_for('ces')}">Voltar ao início</a>
-        <a class="muted" style="margin-left:auto;font-size:13px;text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+        <span style="margin-left:auto;color:#999;">|</span>
+        <a class="muted" style="font-size:13px;text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+        <span style="color:#999;">|</span>
         <a class="muted" style="font-size:13px;text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
       </p>
     </div>"""
