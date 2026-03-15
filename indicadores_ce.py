@@ -133,7 +133,7 @@ def extrair_indicadores(html: str) -> dict | None:
         if v:
             ind["abandono_inscritos"] = _parse_count(v)
 
-    # --- Género (Por sexo — última linha = ano mais recente) ---
+    # --- Sexo (Por sexo — última linha = ano mais recente) ---
     t = _find_table_after_h3(soup, r"Por sexo")
     if t:
         rows = t.find_all("tr")
@@ -703,7 +703,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     if nivel.upper() == "L":
         _fmt("Nota média de entrada (pesada por nº colocados)", "nota_media_entrada", " pontos")
     _fmt("Taxa de abandono", "abandono_pct")
-    _fmt("Género feminino", "feminino_pct")
+    _fmt("Sexo feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
     _fmt("Docentes doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
