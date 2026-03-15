@@ -230,10 +230,9 @@ O parecer deve conter:
    - omissões relevantes nos pontos fortes ou fracos
    - dados importantes não comentados
    - incoerências entre dados e análise
-   - propostas insuficientes ou pouco acionáveis
+   - propostas omissas (para problemas significativos), insuficientes ou pouco acionáveis
    - se foram fornecidos pareceres anteriores: questões recorrentes que voltam a surgir sem progresso visível (incluir como recomendação reiterada)
 
-   Para cada problema identificado, propor **ações de melhoria concretas e acionáveis** — não apenas assinalar o problema, mas sugerir o que pode ser feito (ex: "recomenda-se que o DCE explicite no relatório a distinção entre cumprimento formal e efetivo do requisito de docentes integrados" ou "sugere-se a definição de um plano de ação com metas quantificadas para redução do abandono").
 
    (título de secção seguido de 2–4 pontos numerados, com prioridade para os pontos mais relacionados com a perspetiva do parecer)
    (no caso de auto-avaliação, podem ser 2-6 pontos)
