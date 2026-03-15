@@ -282,6 +282,22 @@ def extrair_indicadores(html: str) -> dict | None:
                     ind["aprovacao_1ano_75pct"] = _parse_count(v)
             break
 
+    # --- Estudantes por ano curricular (última linha = ano mais recente) ---
+    # Usado como peso para a média pesada da taxa IPUP
+    estudantes_por_ano: list[int] = []
+    t = _find_table_after_h3(soup, r"Estudantes por ano curricular")
+    if t:
+        rows = t.find_all("tr")
+        for row in reversed(rows):
+            spans = row.find_all("span", class_="relcur_table")
+            if len(spans) >= 2:
+                # Últimos spans menos o último (que é "Número total")
+                for s in spans[:-1]:
+                    c = _parse_count(s.get_text(strip=True))
+                    if c is not None:
+                        estudantes_por_ano.append(c)
+                break
+
     # --- Inquéritos Pedagógicos (IPUP) ---
     t = _find_table_after_h3(soup, r"Inqu.+ritos Pedag.+gicos")
     if t:
@@ -306,7 +322,17 @@ def extrair_indicadores(html: str) -> dict | None:
         if medianas:
             ind["ipup_mediana_global"] = sum(medianas) / len(medianas)
         if taxa_vals:
-            ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
+            # Média pesada pelo nº de estudantes por ano, se disponível
+            if estudantes_por_ano and len(estudantes_por_ano) == len(taxa_vals):
+                total_est_ano = sum(estudantes_por_ano)
+                if total_est_ano > 0:
+                    ind["ipup_taxa_preenchimento"] = sum(
+                        t * n for t, n in zip(taxa_vals, estudantes_por_ano)
+                    ) / total_est_ano
+                else:
+                    ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
+            else:
+                ind["ipup_taxa_preenchimento"] = sum(taxa_vals) / len(taxa_vals)
 
     # --- Preenchimento de sumários ---
     t = _find_table_after_h3(soup, r"Preenchimento dos sum.+rios")
