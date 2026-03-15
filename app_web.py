@@ -2659,7 +2659,11 @@ def submissao_get(job_id: str):
       {_status_msg}
       {_link_ver}
       {_notif_html}
-      <p style="margin-top:20px;"><a href="{url_for('ces')}">Voltar ao início</a></p>
+      <p style="margin-top:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <a href="{url_for('ces')}">Voltar ao início</a>
+        <a class="muted" style="margin-left:auto;font-size:13px;text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+        <a class="muted" style="font-size:13px;text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
+      </p>
     </div>"""
     return _page("Submissão", body, step=5)
 
