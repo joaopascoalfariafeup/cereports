@@ -779,71 +779,85 @@ def obter_relatorio_ce_html(pv_id: str, sessao: SigarraSession) -> str:
     for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
         comment.extract()
 
-    # 2b. Sumarizar tabelas extensas de corpo docente (>20 docentes)
+    # 2b. Sumarizar tabelas de corpo docente quando internos > threshold.
     #     Agrupa por (UO, Categoria, Grau) com contagem e somas de ETI.
+    #     Quando internos são muitos, externos também são sumarizados (coerência).
     _CORPO_DOCENTE_THRESHOLD = 20
+    from collections import defaultdict
+
+    # Primeiro, verificar se internos excedem o threshold
+    _sumarizar_todos = False
     for h4 in soup.find_all("h4"):
-        if not re.search(r"Corpo docente", h4.get_text(strip=True), re.I):
-            continue
-        table = h4.find_next("table")
-        if not table:
-            continue
-        # Contar linhas de dados (com span relcur_table, excluindo Totais)
-        data_rows = []
-        totais_row = None
-        for tr in table.find_all("tr"):
-            td_k = tr.find("td", class_="k")
-            if td_k and re.search(r"^Totais$", td_k.get_text(strip=True)):
-                totais_row = tr
+        if re.search(r"Corpo docente.*interno", h4.get_text(strip=True), re.I):
+            t_int = h4.find_next("table")
+            if t_int:
+                n_rows = sum(1 for tr in t_int.find_all("tr")
+                             if len(tr.find_all("span", class_="relcur_table")) >= 7)
+                if n_rows > _CORPO_DOCENTE_THRESHOLD:
+                    _sumarizar_todos = True
+            break
+
+    if _sumarizar_todos:
+        for h4 in soup.find_all("h4"):
+            if not re.search(r"Corpo docente", h4.get_text(strip=True), re.I):
                 continue
-            spans = tr.find_all("span", class_="relcur_table")
-            if len(spans) >= 7:
-                data_rows.append(spans)
-        if len(data_rows) <= _CORPO_DOCENTE_THRESHOLD:
-            continue
-        # Agrupar por (UO, Categoria, Grau)
-        from collections import defaultdict
-        grupos: dict[tuple, dict] = defaultdict(lambda: {
-            "n": 0, "regime_eti": 0.0, "esforco_ce": 0.0, "esforco_sem_ot": 0.0,
-        })
-        for spans in data_rows:
-            uo = spans[1].get_text(strip=True) or "N/A"
-            categoria = spans[2].get_text(strip=True) or "N/A"
-            grau = spans[3].get_text(strip=True) or "N/A"
-            key = (uo, categoria, grau)
-            g = grupos[key]
-            g["n"] += 1
-            for field, idx in [("regime_eti", 5), ("esforco_ce", 6), ("esforco_sem_ot", 7)]:
-                txt = spans[idx].get_text(strip=True)
-                if txt:
-                    try:
-                        g[field] += float(txt.replace(",", "."))
-                    except ValueError:
-                        pass
-        # Construir tabela sumarizada
-        new_table = soup.new_tag("table")
-        # Cabeçalho
-        tr_h = soup.new_tag("tr")
-        for col in ["UO", "Categoria", "Grau", "Nº Docentes",
-                     "Regime de tempo (ETI)", "Esforço CE (ETI)", "Esforço sem OT (ETI)"]:
-            th = soup.new_tag("th")
-            th.string = col
-            tr_h.append(th)
-        new_table.append(tr_h)
-        # Linhas agrupadas (ordenadas por UO, Categoria, Grau)
-        for (uo, cat, grau), g in sorted(grupos.items()):
-            tr_d = soup.new_tag("tr")
-            for val in [uo, cat, grau, str(g["n"]),
-                        f"{g['regime_eti']:.1f}", f"{g['esforco_ce']:.3f}",
-                        f"{g['esforco_sem_ot']:.3f}"]:
-                td = soup.new_tag("td")
-                td.string = val
-                tr_d.append(td)
-            new_table.append(tr_d)
-        # Manter linha Totais se existir
-        if totais_row:
-            new_table.append(totais_row.extract())
-        table.replace_with(new_table)
+            table = h4.find_next("table")
+            if not table:
+                continue
+            # Recolher linhas de dados e Totais
+            data_rows = []
+            totais_row = None
+            for tr in table.find_all("tr"):
+                td_k = tr.find("td", class_="k")
+                if td_k and re.search(r"^Totais$", td_k.get_text(strip=True)):
+                    totais_row = tr
+                    continue
+                spans = tr.find_all("span", class_="relcur_table")
+                if len(spans) >= 7:
+                    data_rows.append(spans)
+            if not data_rows:
+                continue
+            # Agrupar por (UO, Categoria, Grau)
+            grupos: dict[tuple, dict] = defaultdict(lambda: {
+                "n": 0, "regime_eti": 0.0, "esforco_ce": 0.0, "esforco_sem_ot": 0.0,
+            })
+            for spans in data_rows:
+                uo = spans[1].get_text(strip=True) or "N/A"
+                categoria = spans[2].get_text(strip=True) or "N/A"
+                grau = spans[3].get_text(strip=True) or "N/A"
+                key = (uo, categoria, grau)
+                g = grupos[key]
+                g["n"] += 1
+                for field, idx in [("regime_eti", 5), ("esforco_ce", 6), ("esforco_sem_ot", 7)]:
+                    txt = spans[idx].get_text(strip=True)
+                    if txt:
+                        try:
+                            g[field] += float(txt.replace(",", "."))
+                        except ValueError:
+                            pass
+            # Construir tabela sumarizada
+            new_table = soup.new_tag("table")
+            tr_h = soup.new_tag("tr")
+            for col in ["UO", "Categoria", "Grau", "Nº Docentes",
+                         "Regime de tempo na Instituição (ETI)",
+                         "Esforço Docente no CE (ETI)",
+                         "Esforço Docente sem OT (ETI)"]:
+                th = soup.new_tag("th")
+                th.string = col
+                tr_h.append(th)
+            new_table.append(tr_h)
+            for (uo, cat, grau), g in sorted(grupos.items()):
+                tr_d = soup.new_tag("tr")
+                for val in [uo, cat, grau, str(g["n"]),
+                            f"{g['regime_eti']:.2f}", f"{g['esforco_ce']:.3f}",
+                            f"{g['esforco_sem_ot']:.3f}"]:
+                    td = soup.new_tag("td")
+                    td.string = val
+                    tr_d.append(td)
+                new_table.append(tr_d)
+            if totais_row:
+                new_table.append(totais_row.extract())
+            table.replace_with(new_table)
 
     # 3. Limpar atributos: manter apenas colspan/rowspan em células de tabela
     for tag in soup.find_all(True):
