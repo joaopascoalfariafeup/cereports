@@ -2526,7 +2526,9 @@ def preview(job_id: str):
         {_aviso_existente}
         <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           {_btn_submeter}
-          <a style="margin-left:auto;font-size: 13px;color:var(--muted);text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+          <span style="margin-left:auto;color:#999;">|</span>
+          <a style="font-size: 13px;color:var(--muted);text-decoration:none;" href="https://forms.gle/heFWbEyTvXMCFcua7" target="_blank">Dar feedback</a>
+          <span style="color:#999;">|</span>
           <a style="font-size: 13px;color:var(--muted);text-decoration:none;" href="{url_for('download_zip', job_id=job_id)}">Exportar dados (.zip)</a>
         </div>
       </div>
@@ -2643,8 +2645,8 @@ def submissao_get(job_id: str):
             <p style="margin:0 0 10px;font-weight:600;">Notificar membro {_esc(_orgao_artigo)} {_esc(_orgao_label)} para rever parecer no SIGARRA</p>
             <form method="post" action="{url_for('notificar_post', job_id=job_id)}">
               <input type="hidden" name="csrf_token" value="{_esc(csrf)}">
-              <div class="row" style="align-items:center;gap:10px;max-width:500px;">
-                <select name="notif_codigo" style="flex:1;" required>
+              <div class="row" style="align-items:center;gap:10px;max-width:500px;flex-wrap:nowrap;">
+                <select name="notif_codigo" style="flex:1;min-width:0;" required>
                   <option value="">— selecionar —</option>
                   {_options}
                 </select>
