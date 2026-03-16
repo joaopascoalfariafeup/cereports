@@ -716,7 +716,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
     _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Esforço docente assegurado por docentes integrados na carreira (ETI)", "esforco_integrados_pct")
-    _fmt("Estudantes inscritos por docente (ETI esforço)", "estudantes_por_docente_eti", "", 1)
+    _fmt("Estudantes por docente ETI (esforço)", "estudantes_por_docente_eti", "", 1)
 
     # -- Processos internos --
     linhas.append("### Processos internos")
@@ -724,7 +724,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
 
     # -- Resultados: satisfação dos estudantes --
     linhas.append("### Resultados: satisfação dos estudantes")
-    _fmt("IPUP média das medianas (escala 1-7, pesada por nº estudantes)", "ipup_mediana_global", "", 2)
+    _fmt("IPUP média das medianas (escala 1-7, pesada por nº de respostas)", "ipup_mediana_global", "", 2)
     _fmt("Taxa de preenchimento IPUP", "ipup_taxa_preenchimento")
 
     # -- Resultados: sucesso escolar --
@@ -732,7 +732,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     _fmt("Taxa de abandono", "abandono_pct")
     _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
-    _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
+    _fmt("Classificação média de saída (pesada por nº de diplomados)", "classif_media_saida", " valores", 1)
     # Teses — média de anos para conclusão (só doutoramentos)
     teses_media = agregados.get("teses_media_anos")
     teses_total = agregados.get("teses_n")
