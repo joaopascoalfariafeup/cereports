@@ -2077,15 +2077,35 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 except Exception:
                     pass
 
-            # Fase 1d — indicadores comparativos (agregados por nível)
-            contexto_comparativo = ""
+            # Fase 1d — prosseguimento L→M (só licenciaturas, pode demorar)
+            _prosseguimento = None
+            _ce_tipo = None
             try:
                 _ce_tipo = next((c["tipo"] for c in listar_ces_publicos() if c["cur_id"] == job.cur_id), None)
+                if _ce_tipo == "L" and job.cur_id:
+                    ano_raw = job.ano_letivo[:4]
+                    _server_sess = _get_server_session()
+                    log.iniciar_fase("prosseguimento", "A calcular prosseguimento L→M...")
+                    from sigarra_ce import obter_prosseguimento_L_M
+                    _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
+                    _prosseguimento = obter_prosseguimento_L_M(
+                        _server_sess, _ano_concl,
+                        progress_cb=lambda msg: log.info(f"  {msg}"),
+                    )
+                    log.concluir_fase("prosseguimento",
+                        f"{_prosseguimento.get('total_prosseguem_M', 0)}/{_prosseguimento.get('total_diplomados_L', 0)} diplomados prosseguem"
+                        if _prosseguimento else "Sem dados")
+            except Exception as e:
+                log.concluir_fase("prosseguimento", f"Erro: {e}", ok=False)
+
+            # Fase 1e — indicadores comparativos (agregados por nível)
+            contexto_comparativo = ""
+            try:
                 if _ce_tipo and job.cur_id:
                     ano_raw = job.ano_letivo[:4]
+                    _server_sess = _get_server_session()
                     log.iniciar_fase("indicadores", "A obter indicadores comparativos de CEs do mesmo nível...")
                     from indicadores_ce import obter_indicadores_agregados, formatar_indicadores_prompt, extrair_indicadores
-                    _server_sess = _get_server_session()
                     _agregados = obter_indicadores_agregados(
                         _server_sess, _ce_tipo, ano_raw,
                         progress_cb=lambda msg: log.info(f"  {msg}"),
@@ -2101,18 +2121,6 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                         log.info(f"  CE print HTML: {len(_ce_html_raw)//1024} KB ({_print_url.split('?')[1]})")
                         _ce_ind = extrair_indicadores(_ce_html_raw)
                         log.info(f"  CE indicadores: {_ce_ind}")
-                        # Prosseguimento L→M (só licenciaturas)
-                        _prosseguimento = None
-                        if _ce_tipo == "L":
-                            try:
-                                from sigarra_ce import obter_prosseguimento_L_M
-                                _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
-                                _prosseguimento = obter_prosseguimento_L_M(
-                                    _server_sess, _ano_concl,
-                                    progress_cb=lambda msg: log.info(f"  {msg}"),
-                                )
-                            except Exception as e:
-                                log.info(f"  Prosseguimento L→M: erro: {e}")
                         contexto_comparativo = formatar_indicadores_prompt(
                             _agregados, _ce_tipo, _ce_ind,
                             prosseguimento=_prosseguimento,
