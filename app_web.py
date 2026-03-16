@@ -2092,9 +2092,13 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                         _server_sess, _ano_concl,
                         progress_cb=lambda msg: log.fase(f"  {msg}"),
                     )
-                    log.concluir_fase("prosseguimento",
-                        f"{_prosseguimento.get('total_prosseguem_M', 0)}/{_prosseguimento.get('total_diplomados_L', 0)} diplomados prosseguem"
-                        if _prosseguimento else "Sem dados")
+                    if _prosseguimento and _prosseguimento.get("total_diplomados_L"):
+                        _tp = _prosseguimento["total_prosseguem_M"]
+                        _td = _prosseguimento["total_diplomados_L"]
+                        log.concluir_fase("prosseguimento",
+                            f"{_tp}/{_td} ({_tp/_td*100:.1f}%) diplomados prosseguem")
+                    else:
+                        log.concluir_fase("prosseguimento", "Sem dados")
             except Exception as e:
                 log.concluir_fase("prosseguimento", f"Erro: {e}", ok=False)
 

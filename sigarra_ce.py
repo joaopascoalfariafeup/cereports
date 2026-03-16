@@ -1205,10 +1205,6 @@ def obter_prosseguimento_L_M(
         "por_curso": por_curso,
     }
 
-    if progress_cb:
-        progress_cb(f"Prosseguimento L→M: {total_prosseguem}/{total_diplomados} "
-                    f"({resultado['prosseguimento_pct']:.1f}%)")
-
     _PROSSEGUIMENTO_CACHE[cache_key] = (now, resultado)
     return resultado
 
