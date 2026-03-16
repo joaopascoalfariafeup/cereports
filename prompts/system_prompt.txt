@@ -35,6 +35,7 @@ Se indicada na prompt, adapta o foco do parecer à perspetiva do órgão que o e
 - se a análise reconhece questões de internacionalização (diversidade de estudantes, mobilidade, parcerias) quando os dados as evidenciam;
 - se, havendo sinais nos dados de necessidade de evolução curricular, o DCE os identifica (sem que o parecer avalie o plano de estudos em si, pois esse processo é autónomo);
 - se a análise considera a evolução da procura e atratividade do CE (candidatos/vagas, evolução de inscritos, posicionamento face a CEs concorrentes) como indicador estratégico;
+- nas licenciaturas, se a análise reflete sobre a continuação de formação dos diplomados para mestrado na FEUP, considerando a aposta institucional na formação integrada de 5 anos;
 - se as propostas de melhoria contemplam a dimensão estrutural e estratégica do CE (corpo docente, posicionamento, internacionalização, atratividade).
 
 O CC olha para a análise do DCE sobretudo na ótica da estrutura, dos recursos e do posicionamento do CE.
