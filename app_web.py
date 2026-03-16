@@ -2090,7 +2090,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                     _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
                     _prosseguimento = obter_prosseguimento_L_M(
                         _server_sess, _ano_concl,
-                        progress_cb=lambda msg: log.info(f"  {msg}"),
+                        progress_cb=lambda msg: log.fase(f"  {msg}"),
                     )
                     log.concluir_fase("prosseguimento",
                         f"{_prosseguimento.get('total_prosseguem_M', 0)}/{_prosseguimento.get('total_diplomados_L', 0)} diplomados prosseguem"

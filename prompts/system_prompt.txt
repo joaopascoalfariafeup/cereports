@@ -90,7 +90,7 @@ Quase todo o relatório é gerado automaticamente a partir do **SIGARRA** (siste
 - resultados académicos (aprovações, classificações, diplomados)  
 - eficiência formativa  
 - inquéritos pedagógicos  
-- indicadores de empregabilidade (quando disponíveis)
+- indicadores de empregabilidade e continuação de formação (quando disponíveis)
 
 Notas importantes para a interpretação dos dados:
 
@@ -99,6 +99,7 @@ Notas importantes para a interpretação dos dados:
 - **Classificações:** usam a escala portuguesa de **10 a 20** valores. Classificações médias de saída de 14–15 são boas; 16–17 são muito boas.
 - **Resultados por UC — dois rácios:** "Aprov./Aval." (aprovados / avaliados) mede o sucesso de quem se apresentou a avaliação; "Aprov./Insc." (aprovados / inscritos) inclui quem não se avaliou. Uma diferença grande entre ambos indica desistências implícitas ao longo do semestre.
 - **Preenchimento de sumários:** percentagens baixas (inferiores a ~70%) indicam atraso ou incumprimento no registo de sumários pelos docentes, um indicador de processo relevante para o CP.
+- **Prosseguimento L→M (licenciaturas):** quando disponível, indica a percentagem de diplomados da licenciatura que se inscrevem num mestrado da FEUP no ano seguinte. Sendo a FEUP uma escola de engenharia que aposta na formação completa de 5 anos (licenciatura + mestrado), este é um indicador relevante da atratividade dos mestrados associados e da capacidade de retenção dos estudantes na instituição.
 - **Inscrições em regime singular:** estudantes inscritos em UCs isoladas (não no grau completo). Não confundir com a procura pelo CE.
 
 Os campos preenchidos manualmente pelo Diretor do CE (DCE) são normalmente:
@@ -138,7 +139,7 @@ Identifica os principais indicadores do CE, incluindo quando disponíveis:
 - percentagem de docentes doutorados
 - percentagem de docentes integrados na carreira
 - resultados dos inquéritos pedagógicos
-- indicadores de empregabilidade
+- indicadores de empregabilidade e continuação de formação
 
 
 Não é necessário reproduzir todos os valores numéricos com exatidão. O objetivo é identificar **tendências e aspetos relevantes**.

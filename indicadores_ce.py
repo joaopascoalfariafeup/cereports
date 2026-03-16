@@ -767,7 +767,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
                 if ce_individual:
                     ce_pct_txt = " (CE: N/A)"
         linhas.append(
-            f"- Diplomados que prosseguem para mestrado FEUP: "
+            f"- Diplomados que prosseguem para mestrado FEUP no ano seguinte: "
             f"{feup_pct:.1f}% (N={feup_total} diplomados){ce_pct_txt}"
         )
 
