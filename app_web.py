@@ -2101,7 +2101,23 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                         log.info(f"  CE print HTML: {len(_ce_html_raw)//1024} KB ({_print_url.split('?')[1]})")
                         _ce_ind = extrair_indicadores(_ce_html_raw)
                         log.info(f"  CE indicadores: {_ce_ind}")
-                        contexto_comparativo = formatar_indicadores_prompt(_agregados, _ce_tipo, _ce_ind)
+                        # Prosseguimento L→M (só licenciaturas)
+                        _prosseguimento = None
+                        if _ce_tipo == "L":
+                            try:
+                                from sigarra_ce import obter_prosseguimento_L_M
+                                _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
+                                _prosseguimento = obter_prosseguimento_L_M(
+                                    _server_sess, _ano_concl,
+                                    progress_cb=lambda msg: log.info(f"  {msg}"),
+                                )
+                            except Exception as e:
+                                log.info(f"  Prosseguimento L→M: erro: {e}")
+                        contexto_comparativo = formatar_indicadores_prompt(
+                            _agregados, _ce_tipo, _ce_ind,
+                            prosseguimento=_prosseguimento,
+                            ce_nome=job.ce_nome,
+                        )
                         log.concluir_fase("indicadores",
                             f"Indicadores de {_agregados['n_cursos']} ciclos de estudo agregados")
                     else:

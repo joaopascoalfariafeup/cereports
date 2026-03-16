@@ -665,11 +665,17 @@ def calcular_racios(ind: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def formatar_indicadores_prompt(agregados: dict, nivel: str,
-                                ce_individual: dict | None = None) -> str:
+                                ce_individual: dict | None = None,
+                                prosseguimento: dict | None = None,
+                                ce_nome: str = "") -> str:
     """Formata indicadores agregados como secção de texto para a prompt do LLM.
 
     Se ce_individual for fornecido (indicadores brutos do CE em análise),
     mostra o valor do CE entre parêntesis ao lado do agregado.
+
+    Args:
+        prosseguimento: Dados de prosseguimento L→M (de obter_prosseguimento_L_M).
+        ce_nome: Nome do CE em análise (para lookup no prosseguimento por_curso).
     """
     nivel_label = _NIVEL_LABEL.get(nivel.upper(), "cursos")
     n = agregados.get("n_cursos", 0)
@@ -742,8 +748,27 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
                   else " (CE: N/A)" if ce_individual else "")
         linhas.append(f"- Duração média de conclusão de tese: {teses_media:.1f} anos (N={teses_total} teses){ce_txt}")
 
-    # -- Resultados: empregabilidade --
-    linhas.append("### Resultados: empregabilidade")
+    # -- Resultados: empregabilidade e continuação de formação --
+    linhas.append("### Resultados: empregabilidade e continuação de formação")
     _fmt("Empregabilidade na área do CE", "empregabilidade_area_pct")
+
+    # Prosseguimento L→M (só licenciaturas)
+    if nivel.upper() == "L" and prosseguimento and prosseguimento.get("total_diplomados_L"):
+        feup_pct = prosseguimento["prosseguimento_pct"]
+        feup_total = prosseguimento["total_diplomados_L"]
+        # Procurar o CE em análise nos dados por curso (match por nome extenso)
+        ce_pct_txt = ""
+        if ce_nome and prosseguimento.get("por_curso"):
+            for curso_nome, info in prosseguimento["por_curso"].items():
+                if ce_nome.lower() in curso_nome.lower() or curso_nome.lower() in ce_nome.lower():
+                    ce_pct_txt = f" (CE: {info['pct']:.1f}%, {info['prosseguem']}/{info['diplomados']})"
+                    break
+            else:
+                if ce_individual:
+                    ce_pct_txt = " (CE: N/A)"
+        linhas.append(
+            f"- Diplomados que prosseguem para mestrado FEUP: "
+            f"{feup_pct:.1f}% (N={feup_total} diplomados){ce_pct_txt}"
+        )
 
     return "\n".join(linhas)
