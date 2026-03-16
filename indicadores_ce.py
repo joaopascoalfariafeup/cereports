@@ -697,20 +697,42 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
                       else " (CE: N/A)" if ce_individual else "")
             linhas.append(f"- {label}: {v:.{decimals}f}{suffix}{ce_txt}")
 
+    # -- Procura e atratividade --
+    linhas.append("### Procura e atratividade")
     _procura_label = ("Rácio candidatos 1ª opção/vagas"
                        if nivel.upper() == "L" else "Rácio candidatos/vagas")
     _fmt(_procura_label, "procura_ratio", "x", 2)
     if nivel.upper() == "L":
         _fmt("Nota média de entrada (pesada por nº colocados)", "nota_media_entrada", " pontos")
-    _fmt("Taxa de abandono", "abandono_pct")
+
+    # -- Caracterização dos estudantes --
+    linhas.append("### Caracterização dos estudantes")
     _fmt("Sexo feminino", "feminino_pct")
     _fmt("Estudantes estrangeiros", "estrangeiros_pct")
+
+    # -- Recursos docentes --
+    linhas.append("### Recursos docentes")
     _fmt("Docentes doutorados (ETI, contrato)", "docentes_doutorados_pct")
     _fmt("Docentes integrados na carreira (ETI, contrato)", "docentes_integrados_pct")
+    _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
     _fmt("Esforço docente assegurado por docentes integrados na carreira (ETI)", "esforco_integrados_pct")
     _fmt("Estudantes inscritos por docente (ETI esforço)", "estudantes_por_docente_eti", "", 1)
-    _fmt("Docentes em unidades de investigação (ETI)", "docentes_investigacao_pct")
+
+    # -- Processos internos --
+    linhas.append("### Processos internos")
+    _fmt("Preenchimento de sumários (última data disponível)", "sumarios_pct")
+
+    # -- Resultados: satisfação dos estudantes --
+    linhas.append("### Resultados: satisfação dos estudantes")
+    _fmt("IPUP média das medianas (escala 1-7, pesada por nº estudantes)", "ipup_mediana_global", "", 2)
+    _fmt("Taxa de preenchimento IPUP", "ipup_taxa_preenchimento")
+
+    # -- Resultados: sucesso escolar --
+    linhas.append("### Resultados: sucesso escolar")
+    _fmt("Taxa de abandono", "abandono_pct")
+    _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
     _fmt("Eficiência formativa (diplomados no tempo mínimo previsto)", "eficiencia_formativa_pct")
+    _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
     # Teses — média de anos para conclusão (só doutoramentos)
     teses_media = agregados.get("teses_media_anos")
     teses_total = agregados.get("teses_n")
@@ -719,11 +741,9 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
         ce_txt = (f" (CE: {ce_teses:.1f} anos)" if ce_teses is not None
                   else " (CE: N/A)" if ce_individual else "")
         linhas.append(f"- Duração média de conclusão de tese: {teses_media:.1f} anos (N={teses_total} teses){ce_txt}")
-    _fmt("Classificação média de saída", "classif_media_saida", " valores", 1)
-    _fmt("Aprovação 1º ano 1ª vez (>=75% ECTS)", "aprovacao_1ano_75pct")
-    _fmt("IPUP média das medianas (escala 1-7, pesada por nº estudantes)", "ipup_mediana_global", "", 2)
-    _fmt("Taxa de preenchimento IPUP", "ipup_taxa_preenchimento")
-    _fmt("Preenchimento de sumários (última data disponível)", "sumarios_pct")
+
+    # -- Resultados: empregabilidade --
+    linhas.append("### Resultados: empregabilidade")
     _fmt("Empregabilidade na área do CE", "empregabilidade_area_pct")
 
     return "\n".join(linhas)
