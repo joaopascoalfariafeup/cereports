@@ -1108,7 +1108,7 @@ def _pesquisar_estudantes(
         "pv_n_registos": str(n_registos),
         "pv_start": "1",
     }
-    html = sess.post_form(_FEST_LIST_URL, data, timeout=60)
+    html = sess.post_form(_FEST_LIST_URL, data, timeout=120)
     return _parse_fest_list(html)
 
 
