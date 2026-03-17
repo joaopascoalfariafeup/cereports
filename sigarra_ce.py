@@ -1176,14 +1176,17 @@ def _pesquisar_estudantes_up(
             progress_cb(f"A obter página {page} de inscritos U.Porto "
                         f"({len(resultados)} registos até agora)...")
 
-        _log.info("prosseguimento UP: a pedir página %d (pi_inicio=%d)...", page, pi_inicio)
         html = sess.post_form(_UP_FEST_URL, params, timeout=300)
-        _log.info("prosseguimento UP: resposta página %d: %d bytes", page, len(html))
         novos = _parse_up_fest_list(html)
         resultados.extend(novos)
 
-        _log.info("prosseguimento UP: página %d → %d registos (total %d)",
-                  page, len(novos), len(resultados))
+        if progress_cb:
+            if novos:
+                progress_cb(f"U.Porto página {page}: {len(novos)} registos "
+                            f"(total {len(resultados)})")
+            else:
+                progress_cb(f"U.Porto página {page}: 0 registos "
+                            f"(resposta {len(html)} bytes)")
 
         if len(novos) < page_size:
             break
@@ -1243,7 +1246,8 @@ def obter_prosseguimento_L_M(
     if progress_cb:
         progress_cb(f"A pesquisar diplomados de licenciatura em {ano_conclusao}/{int(ano_conclusao)+1}...")
     diplomados = _pesquisar_estudantes(sess, "L", 2, ano_conclusao, ano_conclusao)
-    _log.info("prosseguimento: %d diplomados L em %s", len(diplomados), ano_conclusao)
+    if progress_cb:
+        progress_cb(f"{len(diplomados)} diplomados encontrados")
 
     if not diplomados:
         return {}
@@ -1255,7 +1259,8 @@ def obter_prosseguimento_L_M(
         progress_cb(f"A pesquisar inscritos em mestrado na FEUP em {ano_seguinte}/{int(ano_seguinte)+1}...")
     inscritos_m_feup = _pesquisar_estudantes(sess, "M", 1, ano_seguinte, ano_seguinte)
     codigos_m_feup = {codigo for codigo, _ in inscritos_m_feup}
-    _log.info("prosseguimento: %d inscritos M FEUP em %s", len(codigos_m_feup), ano_seguinte)
+    if progress_cb:
+        progress_cb(f"{len(codigos_m_feup)} inscritos em mestrado FEUP")
 
     # 3. Inscritos M em toda a U.Porto no ano seguinte
     inscritos_m_up: list[tuple[str, str, str]] = []
@@ -1268,7 +1273,8 @@ def obter_prosseguimento_L_M(
             sess, "M", 1, ano_seguinte, progress_cb=progress_cb,
         )
         codigos_m_up = {codigo for codigo, _, _ in inscritos_m_up}
-        _log.info("prosseguimento: %d inscritos M U.Porto em %s", len(codigos_m_up), ano_seguinte)
+        if progress_cb:
+            progress_cb(f"{len(codigos_m_up)} inscritos em mestrado U.Porto")
 
         # Distribuição por escola de destino (só diplomados FEUP L que prosseguem)
         for codigo, _, escola in inscritos_m_up:
