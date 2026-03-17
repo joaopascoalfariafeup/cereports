@@ -1128,6 +1128,23 @@ def _parse_fest_list(html: str) -> list[tuple[str, str]]:
     return resultados
 
 
+def _ensure_cookies_for_up(sess: SigarraSession) -> None:
+    """Garante que os cookies da sessão cobrem /up/ (não só /feup/).
+
+    Se os cookies têm path restrito (ex: /feup/), copia-os com path=/ para
+    que sejam enviados a endpoints em /up/.
+    """
+    import copy
+    extras = []
+    for c in sess._cookie_jar:
+        if c.path and c.path != "/" and "/up/" not in c.path:
+            c2 = copy.copy(c)
+            c2.path = "/"
+            extras.append(c2)
+    for c2 in extras:
+        sess._cookie_jar.set_cookie(c2)
+
+
 def _pesquisar_estudantes_up(
     sess: SigarraSession,
     tipo_curso: str,
@@ -1141,6 +1158,7 @@ def _pesquisar_estudantes_up(
     Returns:
         Lista de (codigo_estudante, nome_curso, escola).
     """
+    _ensure_cookies_for_up(sess)
     resultados: list[tuple[str, str, str]] = []
     pi_inicio = 1
     page = 0
