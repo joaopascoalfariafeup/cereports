@@ -1059,13 +1059,11 @@ def submeter_parecer_sigarra(
 # ---------------------------------------------------------------------------
 
 _FEST_LIST_URL = f"{SIGARRA_BASE}/FEST_GERAL.FEST_LIST"
-_UP_FEST_URL = "https://sigarra.up.pt/up/pt/u_fest_geral.querylist"
 
-# IDs de todas as unidades orgânicas da U.Porto
-_UP_INST_IDS = [
-    "62641", "18380", "18395", "18379", "18493", "18383",
-    "18487", "18491", "18490", "18381", "18492", "18494",
-    "18384", "18489", "18382",
+# Escolas da U.Porto (sigla SIGARRA)
+_UP_ESCOLAS = [
+    "feup", "fcup", "fmup", "flup", "fdup", "fbaup", "fadeup",
+    "fep", "fpceup", "faup", "icbas", "fcnaup", "fmdup", "ffup", "esep",
 ]
 
 _PROSSEGUIMENTO_CACHE: dict[str, tuple[float, dict]] = {}
@@ -1128,16 +1126,12 @@ def _parse_fest_list(html: str) -> list[tuple[str, str]]:
     return resultados
 
 
-def _ensure_cookies_for_up(sess: SigarraSession) -> None:
-    """Garante que os cookies da sessão cobrem /up/ (não só /feup/).
-
-    Se os cookies têm path restrito (ex: /feup/), copia-os com path=/ para
-    que sejam enviados a endpoints em /up/.
-    """
+def _ensure_cookies_global(sess: SigarraSession) -> None:
+    """Copia cookies da sessão com path=/ para cobrir todas as escolas UP."""
     import copy
     extras = []
     for c in sess._cookie_jar:
-        if c.path and c.path != "/" and "/up/" not in c.path:
+        if c.path and c.path != "/":
             c2 = copy.copy(c)
             c2.path = "/"
             extras.append(c2)
@@ -1150,87 +1144,56 @@ def _pesquisar_estudantes_up(
     tipo_curso: str,
     estado: int,
     ano: str,
-    page_size: int = 5000,
     progress_cb=None,
 ) -> list[tuple[str, str, str]]:
-    """Pesquisa estudantes em todas as faculdades da U.Porto (com paginação).
+    """Pesquisa estudantes em todas as escolas da U.Porto (1 query por escola).
+
+    Usa o endpoint FEST_GERAL.FEST_LIST de cada escola, que aceita
+    pv_n_registos grande (ao contrário do endpoint UP central).
 
     Returns:
-        Lista de (codigo_estudante, nome_curso, escola).
+        Lista de (codigo_estudante, nome_curso, escola_sigla).
     """
-    _ensure_cookies_for_up(sess)
+    _ensure_cookies_global(sess)
     resultados: list[tuple[str, str, str]] = []
-    pi_inicio = 1
-    page = 0
+    escolas_skip = {"feup"}  # FEUP já é consultada separadamente
 
-    while True:
-        page += 1
-        params: list[tuple[str, str]] = [
-            ("pv_curso_id", ""),
-            ("pv_ramo_id", ""),
-        ]
-        for inst_id in _UP_INST_IDS:
-            params.append(("pa_inst", inst_id))
-        params.extend([
-            ("PV_NUMERO_DE_ESTUDANTE", ""),
-            ("PV_NOME", ""),
-            ("PV_EMAIL", ""),
-            ("PV_TIPO_DE_CURSO", tipo_curso),
-            ("pv_curso_nome", ""),
-            ("pv_ramo_nome", ""),
-            ("PV_AREA_FORM_CONT_ID", ""),
-            ("PV_ESTADO", str(estado)),
-            ("PV_EM", ano),
-            ("PV_ATE", ""),
-            ("PV_1_INSCRICAO_EM", ""),
-            ("PV_ATE_2", ""),
-            ("PV_TIPO", ""),
-            ("pv_n_registos", str(page_size)),
-        ])
-        if pi_inicio > 1:
-            params.append(("pi_inicio", str(pi_inicio)))
+    for i, sigla in enumerate(s for s in _UP_ESCOLAS if s not in escolas_skip):
+        url = f"https://sigarra.up.pt/{sigla}/pt/FEST_GERAL.FEST_LIST"
+        data = {
+            "PV_AREA_FORM_CONT_ID": "",
+            "PV_NUMERO_DE_ESTUDANTE": "",
+            "PV_NOME": "",
+            "pv_email": "",
+            "pv_tipo_de_curso": tipo_curso,
+            "pv_curso_id": "",
+            "pv_curso_nome": "",
+            "pv_ramo_id": "",
+            "pv_ramo_nome": "",
+            "PV_ESTADO": str(estado),
+            "PV_EM": ano,
+            "PV_ATE": ano,
+            "pv_ano_curr_min": "",
+            "pv_ano_curr_max": "",
+            "PV_1_INSCRICAO_EM": "",
+            "PV_ATE_2": "",
+            "PV_TIPO": "",
+            "PV_ESTATUTO_ID": "",
+            "pv_n_registos": "5000",
+            "pv_start": "1",
+        }
+        try:
+            html = sess.post_form(url, data, timeout=300)
+            novos = _parse_fest_list(html)
+            for codigo, curso in novos:
+                resultados.append((codigo, curso, sigla.upper()))
+            if progress_cb:
+                progress_cb(f"{sigla.upper()}: {len(novos)} inscritos"
+                            + (f" (total {len(resultados)})" if len(resultados) > len(novos) else ""))
+        except Exception as e:
+            if progress_cb:
+                progress_cb(f"{sigla.upper()}: erro ({e})")
 
-        if progress_cb and page > 1:
-            progress_cb(f"A obter página {page} de inscritos U.Porto "
-                        f"({len(resultados)} registos até agora)...")
-
-        html = sess.post_form(_UP_FEST_URL, params, timeout=300)
-        novos = _parse_up_fest_list(html)
-        resultados.extend(novos)
-
-        if progress_cb:
-            if novos:
-                progress_cb(f"U.Porto página {page}: {len(novos)} registos "
-                            f"(total {len(resultados)})")
-            else:
-                progress_cb(f"U.Porto página {page}: 0 registos "
-                            f"(resposta {len(html)} bytes)")
-
-        if len(novos) < page_size:
-            break
-
-        pi_inicio += page_size
-
-    return resultados
-
-
-def _parse_up_fest_list(html: str) -> list[tuple[str, str, str]]:
-    """Extrai (codigo, curso_nome, escola) da página u_fest_geral.querylist."""
-    soup = BeautifulSoup(html, "html.parser")
-    resultados: list[tuple[str, str, str]] = []
-    for tr in soup.find_all("tr"):
-        tds = tr.find_all("td")
-        if len(tds) < 4:
-            continue
-        link = tds[0].find("a", href=True)
-        if not link:
-            continue
-        codigo = link.get_text(strip=True)
-        if not codigo or not codigo[0].isdigit():
-            continue
-        curso_nome = tds[2].get_text(strip=True)
-        escola = tds[3].get_text(strip=True)
-        resultados.append((codigo, curso_nome, escola))
     return resultados
 
 
@@ -1291,10 +1254,18 @@ def obter_prosseguimento_L_M(
             sess, "M", 1, ano_seguinte, progress_cb=progress_cb,
         )
         codigos_m_up = {codigo for codigo, _, _ in inscritos_m_up}
+        # Juntar com FEUP (já obtidos antes) para total U.Porto
+        codigos_m_up |= codigos_m_feup
         if progress_cb:
-            progress_cb(f"{len(codigos_m_up)} inscritos em mestrado U.Porto")
+            progress_cb(f"Total U.Porto: {len(codigos_m_up)} inscritos em mestrado "
+                        f"({len(codigos_m_feup)} FEUP + {len(codigos_m_up) - len(codigos_m_feup)} outras)")
 
         # Distribuição por escola de destino (só diplomados FEUP L que prosseguem)
+        # FEUP
+        for codigo, _ in inscritos_m_feup:
+            if codigo in codigos_diplomados:
+                por_escola["FEUP"] = por_escola.get("FEUP", 0) + 1
+        # Outras escolas
         for codigo, _, escola in inscritos_m_up:
             if codigo in codigos_diplomados:
                 por_escola[escola] = por_escola.get(escola, 0) + 1
