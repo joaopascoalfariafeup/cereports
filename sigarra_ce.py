@@ -1176,7 +1176,9 @@ def _pesquisar_estudantes_up(
             progress_cb(f"A obter página {page} de inscritos U.Porto "
                         f"({len(resultados)} registos até agora)...")
 
+        _log.info("prosseguimento UP: a pedir página %d (pi_inicio=%d)...", page, pi_inicio)
         html = sess.post_form(_UP_FEST_URL, params, timeout=300)
+        _log.info("prosseguimento UP: resposta página %d: %d bytes", page, len(html))
         novos = _parse_up_fest_list(html)
         resultados.extend(novos)
 
@@ -1273,9 +1275,9 @@ def obter_prosseguimento_L_M(
             if codigo in codigos_diplomados:
                 por_escola[escola] = por_escola.get(escola, 0) + 1
     except Exception as e:
-        _log.warning("prosseguimento: erro ao pesquisar U.Porto: %s", e)
+        _log.warning("prosseguimento: erro ao pesquisar U.Porto: %s", e, exc_info=True)
         if progress_cb:
-            progress_cb(f"Pesquisa U.Porto falhou ({e}), usando apenas dados FEUP")
+            progress_cb(f"Pesquisa U.Porto falhou: {e}")
 
     # 4. Cruzar diplomados com inscritos M
     por_curso: dict[str, dict] = {}
