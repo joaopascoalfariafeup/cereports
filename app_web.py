@@ -1011,7 +1011,7 @@ function setupProgressSSE() {
     pre.textContent += ev.data;
     pre.scrollTop = pre.scrollHeight;
   };
-  es.onerror = () => { es.close(); };
+  // EventSource reconecta automaticamente; não fechar em caso de erro
 }
 
 function setupEditableBlocks() {
@@ -2437,6 +2437,7 @@ def events(job_id: str):
                 break
             time.sleep(0.1)
 
+        idle_count = 0
         while True:
             try:
                 with job.log_path.open("r", encoding="utf-8", errors="replace") as f:
@@ -2453,6 +2454,11 @@ def events(job_id: str):
                     f"id: {last_pos}\n"
                     "data: " + chunk.replace("\n", "\ndata: ") + "\n\n"
                 )
+                idle_count = 0
+            else:
+                idle_count += 1
+                if idle_count % 60 == 0:  # ~21s sem output → keepalive SSE
+                    yield ": keepalive\n\n"
 
             if job.done:
                 if not chunk:
