@@ -789,6 +789,16 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
         por_escola = prosseguimento.get("por_escola", {})
         if len(por_escola) > 1:
             dist = ", ".join(f"{esc} {n}" for esc, n in por_escola.items())
-            linhas.append(f"  Distribuição por escola de destino: {dist}")
+            linhas.append(f"  Distribuição por escola de destino (todas as L): {dist}")
+
+        # Distribuição do CE em análise
+        if ce_nome and prosseguimento.get("por_curso"):
+            for curso_nome, info in prosseguimento["por_curso"].items():
+                if ce_nome.lower() in curso_nome.lower() or curso_nome.lower() in ce_nome.lower():
+                    pe_ce = info.get("por_escola", {})
+                    if pe_ce:
+                        dist_ce = ", ".join(f"{esc} {n}" for esc, n in pe_ce.items())
+                        linhas.append(f"  Distribuição por escola de destino (CE): {dist_ce}")
+                    break
 
     return "\n".join(linhas)

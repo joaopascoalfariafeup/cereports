@@ -1144,12 +1144,18 @@ def _pesquisar_estudantes_up(
     tipo_curso: str,
     estado: int,
     ano: str,
+    codigos_diplomados: set[str] | None = None,
+    codigos_ce: set[str] | None = None,
     progress_cb=None,
 ) -> list[tuple[str, str, str]]:
     """Pesquisa estudantes em todas as escolas da U.Porto (1 query por escola).
 
     Usa o endpoint FEST_GERAL.FEST_LIST de cada escola, que aceita
     pv_n_registos grande (ao contrário do endpoint UP central).
+
+    Args:
+        codigos_diplomados: Códigos de todos os diplomados L FEUP (para reportar matches).
+        codigos_ce:         Códigos dos diplomados do CE em análise (para reportar matches).
 
     Returns:
         Lista de (codigo_estudante, nome_curso, escola_sigla).
@@ -1158,7 +1164,7 @@ def _pesquisar_estudantes_up(
     resultados: list[tuple[str, str, str]] = []
     escolas_skip = {"feup"}  # FEUP já é consultada separadamente
 
-    for i, sigla in enumerate(s for s in _UP_ESCOLAS if s not in escolas_skip):
+    for sigla in (s for s in _UP_ESCOLAS if s not in escolas_skip):
         url = f"https://sigarra.up.pt/{sigla}/pt/FEST_GERAL.FEST_LIST"
         data = {
             "PV_AREA_FORM_CONT_ID": "",
@@ -1188,8 +1194,17 @@ def _pesquisar_estudantes_up(
             for codigo, curso in novos:
                 resultados.append((codigo, curso, sigla.upper()))
             if progress_cb:
-                progress_cb(f"{sigla.upper()}: {len(novos)} inscritos"
-                            + (f" (total {len(resultados)})" if len(resultados) > len(novos) else ""))
+                msg = f"{sigla.upper()}: {len(novos)} inscritos"
+                if codigos_diplomados and novos:
+                    codigos_escola = {c for c, _ in novos}
+                    n_feup = len(codigos_escola & codigos_diplomados)
+                    if n_feup:
+                        msg += f", {n_feup} ex-FEUP L"
+                        if codigos_ce:
+                            n_ce = len(codigos_escola & codigos_ce)
+                            if n_ce:
+                                msg += f" ({n_ce} do CE)"
+                progress_cb(msg)
         except Exception as e:
             if progress_cb:
                 progress_cb(f"{sigla.upper()}: erro ({e})")
@@ -1200,6 +1215,7 @@ def _pesquisar_estudantes_up(
 def obter_prosseguimento_L_M(
     sess: SigarraSession,
     ano_conclusao: str,
+    ce_nome: str = "",
     progress_cb=None,
 ) -> dict:
     """Calcula percentagem de diplomados L que prosseguem para M (FEUP e U.Porto).
@@ -1207,6 +1223,7 @@ def obter_prosseguimento_L_M(
     Args:
         sess:           Sessão SIGARRA autenticada.
         ano_conclusao:  Ano letivo de conclusão (ex: "2023" para 2023/2024).
+        ce_nome:        Nome do CE em análise (para reportar matches por escola).
         progress_cb:    Callback(msg: str) para reportar progresso (opcional).
 
     Returns:
@@ -1235,6 +1252,13 @@ def obter_prosseguimento_L_M(
 
     codigos_diplomados = {codigo for codigo, _ in diplomados}
 
+    # Códigos do CE em análise (para reportar matches por escola)
+    codigos_ce: set[str] = set()
+    if ce_nome:
+        for codigo, curso in diplomados:
+            if ce_nome.lower() in curso.lower() or curso.lower() in ce_nome.lower():
+                codigos_ce.add(codigo)
+
     # 2. Inscritos M na FEUP no ano seguinte
     if progress_cb:
         progress_cb(f"A pesquisar inscritos em mestrado na FEUP em {ano_seguinte}/{int(ano_seguinte)+1}...")
@@ -1251,7 +1275,10 @@ def obter_prosseguimento_L_M(
         if progress_cb:
             progress_cb(f"A pesquisar inscritos em mestrado na U.Porto em {ano_seguinte}/{int(ano_seguinte)+1}...")
         inscritos_m_up = _pesquisar_estudantes_up(
-            sess, "M", 1, ano_seguinte, progress_cb=progress_cb,
+            sess, "M", 1, ano_seguinte,
+            codigos_diplomados=codigos_diplomados,
+            codigos_ce=codigos_ce or None,
+            progress_cb=progress_cb,
         )
         codigos_m_up = {codigo for codigo, _, _ in inscritos_m_up}
         # Juntar com FEUP (já obtidos antes) para total U.Porto
@@ -1274,6 +1301,14 @@ def obter_prosseguimento_L_M(
         if progress_cb:
             progress_cb(f"Pesquisa U.Porto falhou: {e}")
 
+    # Mapeamento codigo → escola de destino (para distribuição por curso)
+    codigo_para_escola: dict[str, str] = {}
+    for codigo, _ in inscritos_m_feup:
+        codigo_para_escola[codigo] = "FEUP"
+    for codigo, _, escola in inscritos_m_up:
+        if codigo not in codigo_para_escola:  # outras escolas (FEUP já mapeada)
+            codigo_para_escola[codigo] = escola
+
     # 4. Cruzar diplomados com inscritos M
     por_curso: dict[str, dict] = {}
     total_diplomados = 0
@@ -1282,7 +1317,8 @@ def obter_prosseguimento_L_M(
 
     for codigo, curso in diplomados:
         if curso not in por_curso:
-            por_curso[curso] = {"diplomados": 0, "prosseguem_feup": 0, "prosseguem_up": 0}
+            por_curso[curso] = {"diplomados": 0, "prosseguem_feup": 0, "prosseguem_up": 0,
+                                "por_escola": {}}
         por_curso[curso]["diplomados"] += 1
         total_diplomados += 1
         if codigo in codigos_m_feup:
@@ -1291,11 +1327,18 @@ def obter_prosseguimento_L_M(
         if codigos_m_up and codigo in codigos_m_up:
             por_curso[curso]["prosseguem_up"] += 1
             total_up += 1
+        # Distribuição por escola para este curso
+        escola_dest = codigo_para_escola.get(codigo)
+        if escola_dest:
+            pe = por_curso[curso]["por_escola"]
+            pe[escola_dest] = pe.get(escola_dest, 0) + 1
 
     for info in por_curso.values():
         d = info["diplomados"]
         info["pct_feup"] = info["prosseguem_feup"] / d * 100 if d > 0 else 0
         info["pct_up"] = info["prosseguem_up"] / d * 100 if d > 0 else 0
+        # Ordenar por_escola por contagem decrescente
+        info["por_escola"] = dict(sorted(info["por_escola"].items(), key=lambda x: -x[1]))
 
     resultado = {
         "total_diplomados_L": total_diplomados,

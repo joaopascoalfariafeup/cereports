@@ -2096,6 +2096,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                     _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
                     _prosseguimento = obter_prosseguimento_L_M(
                         _get_data_session(), _ano_concl,
+                        ce_nome=job.ce_nome,
                         progress_cb=lambda msg: log.fase(f"  {msg}"),
                     )
                     if _prosseguimento and _prosseguimento.get("total_diplomados_L"):
@@ -2355,7 +2356,7 @@ def progress(job_id: str):
     elif job.done and not job.ok:
         estado = f'<span class="status-err">Geração falhou: {_esc(job.error or "erro desconhecido")}</span>'
     else:
-        estado = '<span class="status-run">A gerar parecer... pode demorar alguns minutos</span>'
+        estado = '<span class="status-run">A extrair dados e gerar parecer... pode demorar alguns minutos</span>'
 
     should_reload_on_done = "true" if not job.done else "false"
     ano_label = job.ano_letivo
