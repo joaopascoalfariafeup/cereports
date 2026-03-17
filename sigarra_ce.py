@@ -1055,13 +1055,20 @@ def submeter_parecer_sigarra(
 
 
 # ---------------------------------------------------------------------------
-# Diplomados L que prosseguem para M na FEUP
+# Diplomados L que prosseguem para M (FEUP e U.Porto)
 # ---------------------------------------------------------------------------
 
 _FEST_LIST_URL = f"{SIGARRA_BASE}/FEST_GERAL.FEST_LIST"
+_UP_FEST_URL = "https://sigarra.up.pt/up/pt/u_fest_geral.querylist"
 
-# Cache: (ano_conclusao,) → {diplomados_L: dict[curso_nome, set[codigo]], inscritos_M: set[codigo]}
-_PROSSEGUIMENTO_CACHE: "dict[str, tuple[float, dict]] | None" = {}
+# IDs de todas as unidades orgânicas da U.Porto
+_UP_INST_IDS = [
+    "62641", "18380", "18395", "18379", "18493", "18383",
+    "18487", "18491", "18490", "18381", "18492", "18494",
+    "18384", "18489", "18382",
+]
+
+_PROSSEGUIMENTO_CACHE: dict[str, tuple[float, dict]] = {}
 _PROSSEGUIMENTO_TTL = 24 * 3600  # 24 h
 
 
@@ -1073,18 +1080,10 @@ def _pesquisar_estudantes(
     ano_ate: str,
     n_registos: int = 5000,
 ) -> list[tuple[str, str]]:
-    """Pesquisa estudantes no SIGARRA via FEST_GERAL.FEST_LIST.
-
-    Args:
-        sess:        Sessão SIGARRA autenticada.
-        tipo_curso:  "L", "M" ou "D".
-        estado:      1 = inscritos, 2 = concluídos.
-        ano_de:      Ano letivo início (ex: "2023" para 2023/2024).
-        ano_ate:     Ano letivo fim.
-        n_registos:  Número máximo de registos por página.
+    """Pesquisa estudantes na FEUP via FEST_GERAL.FEST_LIST.
 
     Returns:
-        Lista de (codigo_estudante, nome_curso) com todos os resultados.
+        Lista de (codigo_estudante, nome_curso).
     """
     data = {
         "PV_AREA_FORM_CONT_ID": "",
@@ -1113,23 +1112,102 @@ def _pesquisar_estudantes(
 
 
 def _parse_fest_list(html: str) -> list[tuple[str, str]]:
-    """Extrai (codigo, curso_nome) da página de resultados FEST_GERAL.FEST_LIST."""
+    """Extrai (codigo, curso_nome) da página FEST_GERAL.FEST_LIST (FEUP)."""
     soup = BeautifulSoup(html, "html.parser")
     resultados: list[tuple[str, str]] = []
-
     for tr in soup.find_all("tr"):
         tds = tr.find_all("td")
         if len(tds) < 3:
             continue
-        # 1ª coluna: código (link com pct_codigo=NNNNNNN)
         link = tds[0].find("a", href=True)
         if not link or "pct_codigo=" not in link["href"]:
             continue
         codigo = link.get_text(strip=True)
-        # 3ª coluna: nome do curso (por extenso)
         curso_nome = tds[2].get_text(strip=True)
         resultados.append((codigo, curso_nome))
+    return resultados
 
+
+def _pesquisar_estudantes_up(
+    sess: SigarraSession,
+    tipo_curso: str,
+    estado: int,
+    ano: str,
+    page_size: int = 5000,
+    progress_cb=None,
+) -> list[tuple[str, str, str]]:
+    """Pesquisa estudantes em todas as faculdades da U.Porto (com paginação).
+
+    Returns:
+        Lista de (codigo_estudante, nome_curso, escola).
+    """
+    resultados: list[tuple[str, str, str]] = []
+    pi_inicio = 1
+    page = 0
+
+    while True:
+        page += 1
+        params: list[tuple[str, str]] = [
+            ("pv_curso_id", ""),
+            ("pv_ramo_id", ""),
+        ]
+        for inst_id in _UP_INST_IDS:
+            params.append(("pa_inst", inst_id))
+        params.extend([
+            ("PV_NUMERO_DE_ESTUDANTE", ""),
+            ("PV_NOME", ""),
+            ("PV_EMAIL", ""),
+            ("PV_TIPO_DE_CURSO", tipo_curso),
+            ("pv_curso_nome", ""),
+            ("pv_ramo_nome", ""),
+            ("PV_AREA_FORM_CONT_ID", ""),
+            ("PV_ESTADO", str(estado)),
+            ("PV_EM", ano),
+            ("PV_ATE", ""),
+            ("PV_1_INSCRICAO_EM", ""),
+            ("PV_ATE_2", ""),
+            ("PV_TIPO", ""),
+            ("pv_n_registos", str(page_size)),
+        ])
+        if pi_inicio > 1:
+            params.append(("pi_inicio", str(pi_inicio)))
+
+        if progress_cb and page > 1:
+            progress_cb(f"A obter página {page} de inscritos U.Porto "
+                        f"({len(resultados)} registos até agora)...")
+
+        html = sess.post_form(_UP_FEST_URL, params, timeout=300)
+        novos = _parse_up_fest_list(html)
+        resultados.extend(novos)
+
+        _log.info("prosseguimento UP: página %d → %d registos (total %d)",
+                  page, len(novos), len(resultados))
+
+        if len(novos) < page_size:
+            break
+
+        pi_inicio += page_size
+
+    return resultados
+
+
+def _parse_up_fest_list(html: str) -> list[tuple[str, str, str]]:
+    """Extrai (codigo, curso_nome, escola) da página u_fest_geral.querylist."""
+    soup = BeautifulSoup(html, "html.parser")
+    resultados: list[tuple[str, str, str]] = []
+    for tr in soup.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 4:
+            continue
+        link = tds[0].find("a", href=True)
+        if not link:
+            continue
+        codigo = link.get_text(strip=True)
+        if not codigo or not codigo[0].isdigit():
+            continue
+        curso_nome = tds[2].get_text(strip=True)
+        escola = tds[3].get_text(strip=True)
+        resultados.append((codigo, curso_nome, escola))
     return resultados
 
 
@@ -1138,7 +1216,7 @@ def obter_prosseguimento_L_M(
     ano_conclusao: str,
     progress_cb=None,
 ) -> dict:
-    """Calcula percentagem de diplomados L que se inscrevem em M na FEUP.
+    """Calcula percentagem de diplomados L que prosseguem para M (FEUP e U.Porto).
 
     Args:
         sess:           Sessão SIGARRA autenticada.
@@ -1146,11 +1224,7 @@ def obter_prosseguimento_L_M(
         progress_cb:    Callback(msg: str) para reportar progresso (opcional).
 
     Returns:
-        Dict com:
-          - total_diplomados_L: int
-          - total_prosseguem_M: int
-          - prosseguimento_pct: float (percentagem)
-          - por_curso: dict[curso_nome, {diplomados: int, prosseguem: int, pct: float}]
+        Dict com chaves FEUP e U.Porto, por curso de origem e por escola destino.
     """
     cache_key = ano_conclusao
     now = time.time()
@@ -1163,7 +1237,7 @@ def obter_prosseguimento_L_M(
 
     ano_seguinte = str(int(ano_conclusao) + 1)
 
-    # Diplomados L no ano de conclusão
+    # 1. Diplomados L na FEUP no ano de conclusão
     if progress_cb:
         progress_cb(f"A pesquisar diplomados de licenciatura em {ano_conclusao}/{int(ano_conclusao)+1}...")
     diplomados = _pesquisar_estudantes(sess, "L", 2, ano_conclusao, ano_conclusao)
@@ -1172,37 +1246,68 @@ def obter_prosseguimento_L_M(
     if not diplomados:
         return {}
 
-    # Inscritos M no ano seguinte
+    codigos_diplomados = {codigo for codigo, _ in diplomados}
+
+    # 2. Inscritos M na FEUP no ano seguinte
     if progress_cb:
-        progress_cb(f"A pesquisar inscritos em mestrado em {ano_seguinte}/{int(ano_seguinte)+1}...")
-    inscritos_m = _pesquisar_estudantes(sess, "M", 1, ano_seguinte, ano_seguinte)
-    _log.info("prosseguimento: %d inscritos M em %s", len(inscritos_m), ano_seguinte)
+        progress_cb(f"A pesquisar inscritos em mestrado na FEUP em {ano_seguinte}/{int(ano_seguinte)+1}...")
+    inscritos_m_feup = _pesquisar_estudantes(sess, "M", 1, ano_seguinte, ano_seguinte)
+    codigos_m_feup = {codigo for codigo, _ in inscritos_m_feup}
+    _log.info("prosseguimento: %d inscritos M FEUP em %s", len(codigos_m_feup), ano_seguinte)
 
-    codigos_m = {codigo for codigo, _ in inscritos_m}
+    # 3. Inscritos M em toda a U.Porto no ano seguinte
+    inscritos_m_up: list[tuple[str, str, str]] = []
+    codigos_m_up: set[str] = set()
+    por_escola: dict[str, int] = {}
+    try:
+        if progress_cb:
+            progress_cb(f"A pesquisar inscritos em mestrado na U.Porto em {ano_seguinte}/{int(ano_seguinte)+1}...")
+        inscritos_m_up = _pesquisar_estudantes_up(
+            sess, "M", 1, ano_seguinte, progress_cb=progress_cb,
+        )
+        codigos_m_up = {codigo for codigo, _, _ in inscritos_m_up}
+        _log.info("prosseguimento: %d inscritos M U.Porto em %s", len(codigos_m_up), ano_seguinte)
 
-    # Agrupar diplomados por curso de origem
+        # Distribuição por escola de destino (só diplomados FEUP L que prosseguem)
+        for codigo, _, escola in inscritos_m_up:
+            if codigo in codigos_diplomados:
+                por_escola[escola] = por_escola.get(escola, 0) + 1
+    except Exception as e:
+        _log.warning("prosseguimento: erro ao pesquisar U.Porto: %s", e)
+        if progress_cb:
+            progress_cb(f"Pesquisa U.Porto falhou ({e}), usando apenas dados FEUP")
+
+    # 4. Cruzar diplomados com inscritos M
     por_curso: dict[str, dict] = {}
     total_diplomados = 0
-    total_prosseguem = 0
+    total_feup = 0
+    total_up = 0
 
     for codigo, curso in diplomados:
         if curso not in por_curso:
-            por_curso[curso] = {"diplomados": 0, "prosseguem": 0}
+            por_curso[curso] = {"diplomados": 0, "prosseguem_feup": 0, "prosseguem_up": 0}
         por_curso[curso]["diplomados"] += 1
         total_diplomados += 1
-        if codigo in codigos_m:
-            por_curso[curso]["prosseguem"] += 1
-            total_prosseguem += 1
+        if codigo in codigos_m_feup:
+            por_curso[curso]["prosseguem_feup"] += 1
+            total_feup += 1
+        if codigos_m_up and codigo in codigos_m_up:
+            por_curso[curso]["prosseguem_up"] += 1
+            total_up += 1
 
-    # Calcular percentagens
     for info in por_curso.values():
-        info["pct"] = info["prosseguem"] / info["diplomados"] * 100 if info["diplomados"] > 0 else 0
+        d = info["diplomados"]
+        info["pct_feup"] = info["prosseguem_feup"] / d * 100 if d > 0 else 0
+        info["pct_up"] = info["prosseguem_up"] / d * 100 if d > 0 else 0
 
     resultado = {
         "total_diplomados_L": total_diplomados,
-        "total_prosseguem_M": total_prosseguem,
-        "prosseguimento_pct": total_prosseguem / total_diplomados * 100 if total_diplomados > 0 else 0,
+        "total_prosseguem_M": total_feup,
+        "prosseguimento_pct": total_feup / total_diplomados * 100 if total_diplomados > 0 else 0,
+        "total_prosseguem_M_up": total_up,
+        "prosseguimento_up_pct": total_up / total_diplomados * 100 if total_diplomados > 0 else 0,
         "por_curso": por_curso,
+        "por_escola": dict(sorted(por_escola.items(), key=lambda x: -x[1])),
     }
 
     _PROSSEGUIMENTO_CACHE[cache_key] = (now, resultado)

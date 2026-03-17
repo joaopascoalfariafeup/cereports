@@ -418,9 +418,12 @@ class SigarraSession:
         except urllib.error.URLError as e:
             raise ConnectionError(f"Erro de rede/timeout ao aceder a {url}: {e}") from e
 
-    def post_form(self, url: str, data: dict, timeout: int = 30) -> str:
-        """Faz POST de um formulário para o SIGARRA (com cookies de sessão)."""
-        encoded = urllib.parse.urlencode(data).encode("utf-8")
+    def post_form(self, url: str, data: "dict | list[tuple]", timeout: int = 30) -> str:
+        """Faz POST de um formulário para o SIGARRA (com cookies de sessão).
+
+        data pode ser dict ou lista de tuplos (para múltiplos valores da mesma chave).
+        """
+        encoded = urllib.parse.urlencode(data, doseq=True).encode("utf-8")
         req = urllib.request.Request(
             url,
             data=encoded,

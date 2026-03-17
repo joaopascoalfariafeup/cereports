@@ -755,20 +755,40 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
     # Prosseguimento L→M (só licenciaturas)
     if nivel.upper() == "L" and prosseguimento and prosseguimento.get("total_diplomados_L"):
         feup_pct = prosseguimento["prosseguimento_pct"]
-        feup_total = prosseguimento["total_diplomados_L"]
+        up_pct = prosseguimento.get("prosseguimento_up_pct")
+        total = prosseguimento["total_diplomados_L"]
+
         # Procurar o CE em análise nos dados por curso (match por nome extenso)
-        ce_pct_txt = ""
+        ce_txt = ""
         if ce_nome and prosseguimento.get("por_curso"):
             for curso_nome, info in prosseguimento["por_curso"].items():
                 if ce_nome.lower() in curso_nome.lower() or curso_nome.lower() in ce_nome.lower():
-                    ce_pct_txt = f" (CE: {info['pct']:.1f}%, {info['prosseguem']}/{info['diplomados']})"
+                    parts = [f"CE: {info['pct_feup']:.1f}% FEUP"]
+                    if info.get("pct_up"):
+                        parts.append(f"{info['pct_up']:.1f}% U.Porto")
+                    ce_txt = f" ({', '.join(parts)}, {info['prosseguem_feup']}/{info['diplomados']})"
                     break
             else:
                 if ce_individual:
-                    ce_pct_txt = " (CE: N/A)"
-        linhas.append(
-            f"- Diplomados que prosseguem para mestrado FEUP no ano seguinte: "
-            f"{feup_pct:.1f}% (N={feup_total} diplomados){ce_pct_txt}"
-        )
+                    ce_txt = " (CE: N/A)"
+
+        # Linha com FEUP e U.Porto
+        if up_pct and up_pct > feup_pct:
+            linhas.append(
+                f"- Diplomados que prosseguem para mestrado no ano seguinte: "
+                f"{up_pct:.1f}% U.Porto, {feup_pct:.1f}% FEUP "
+                f"(N={total} diplomados){ce_txt}"
+            )
+        else:
+            linhas.append(
+                f"- Diplomados que prosseguem para mestrado FEUP no ano seguinte: "
+                f"{feup_pct:.1f}% (N={total} diplomados){ce_txt}"
+            )
+
+        # Distribuição por escola de destino (se disponível e com mais que FEUP)
+        por_escola = prosseguimento.get("por_escola", {})
+        if len(por_escola) > 1:
+            dist = ", ".join(f"{esc} {n}" for esc, n in por_escola.items())
+            linhas.append(f"  Distribuição por escola de destino: {dist}")
 
     return "\n".join(linhas)
