@@ -20,8 +20,9 @@ cereports-venv/
 # Secrets / local config
 .env
 
-# Output / logs
+# Output / logs / cache
 output/
+cache/
 
 # IDE
 .vscode/

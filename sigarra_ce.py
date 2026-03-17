@@ -6,7 +6,9 @@ Funções específicas para listar CEs e obter relatórios pedagógicos.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -1066,8 +1068,34 @@ _UP_ESCOLAS = [
     "fep", "fpceup", "faup", "icbas", "fcnaup", "fmdup", "ffup", "esep",
 ]
 
-_PROSSEGUIMENTO_CACHE: dict[str, tuple[float, dict]] = {}
-_PROSSEGUIMENTO_TTL = 24 * 3600  # 24 h
+_PROSSEGUIMENTO_TTL = 30 * 24 * 3600  # 30 dias (dados históricos estáveis)
+_PROSSEGUIMENTO_CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
+
+
+def _prosseguimento_cache_path(ano: str) -> str:
+    return os.path.join(_PROSSEGUIMENTO_CACHE_DIR, f"prosseguimento_{ano}.json")
+
+
+def _prosseguimento_load(ano: str) -> dict | None:
+    """Carrega cache de prosseguimento do disco, ou None se expirado/inexistente."""
+    path = _prosseguimento_cache_path(ano)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - data.get("_ts", 0) < _PROSSEGUIMENTO_TTL:
+            return data
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+
+def _prosseguimento_save(ano: str, resultado: dict) -> None:
+    """Guarda cache de prosseguimento em disco."""
+    os.makedirs(_PROSSEGUIMENTO_CACHE_DIR, exist_ok=True)
+    resultado["_ts"] = time.time()
+    path = _prosseguimento_cache_path(ano)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(resultado, f, ensure_ascii=False)
 
 
 def _pesquisar_estudantes(
@@ -1229,14 +1257,12 @@ def obter_prosseguimento_L_M(
     Returns:
         Dict com chaves FEUP e U.Porto, por curso de origem e por escola destino.
     """
-    cache_key = ano_conclusao
+    cached = _prosseguimento_load(ano_conclusao)
+    if cached is not None:
+        if progress_cb:
+            progress_cb("Prosseguimento L→M obtido de cache")
+        return cached
     now = time.time()
-    if cache_key in _PROSSEGUIMENTO_CACHE:
-        ts, cached = _PROSSEGUIMENTO_CACHE[cache_key]
-        if now - ts < _PROSSEGUIMENTO_TTL:
-            if progress_cb:
-                progress_cb("Prosseguimento L→M obtido de cache")
-            return cached
 
     ano_seguinte = str(int(ano_conclusao) + 1)
 
@@ -1301,13 +1327,13 @@ def obter_prosseguimento_L_M(
         if progress_cb:
             progress_cb(f"Pesquisa U.Porto falhou: {e}")
 
-    # Mapeamento codigo → escola de destino (para distribuição por curso)
-    codigo_para_escola: dict[str, str] = {}
+    # Mapeamento codigo → escolas de destino (com duplicados: um aluno pode
+    # estar inscrito em M em várias escolas simultaneamente)
+    codigo_para_escolas: dict[str, list[str]] = {}
     for codigo, _ in inscritos_m_feup:
-        codigo_para_escola[codigo] = "FEUP"
+        codigo_para_escolas.setdefault(codigo, []).append("FEUP")
     for codigo, _, escola in inscritos_m_up:
-        if codigo not in codigo_para_escola:  # outras escolas (FEUP já mapeada)
-            codigo_para_escola[codigo] = escola
+        codigo_para_escolas.setdefault(codigo, []).append(escola)
 
     # 4. Cruzar diplomados com inscritos M
     por_curso: dict[str, dict] = {}
@@ -1327,9 +1353,8 @@ def obter_prosseguimento_L_M(
         if codigos_m_up and codigo in codigos_m_up:
             por_curso[curso]["prosseguem_up"] += 1
             total_up += 1
-        # Distribuição por escola para este curso
-        escola_dest = codigo_para_escola.get(codigo)
-        if escola_dest:
+        # Distribuição por escola para este curso (com duplicados: inscrições)
+        for escola_dest in codigo_para_escolas.get(codigo, []):
             pe = por_curso[curso]["por_escola"]
             pe[escola_dest] = pe.get(escola_dest, 0) + 1
 
@@ -1350,6 +1375,6 @@ def obter_prosseguimento_L_M(
         "por_escola": dict(sorted(por_escola.items(), key=lambda x: -x[1])),
     }
 
-    _PROSSEGUIMENTO_CACHE[cache_key] = (now, resultado)
+    _prosseguimento_save(ano_conclusao, resultado)
     return resultado
 

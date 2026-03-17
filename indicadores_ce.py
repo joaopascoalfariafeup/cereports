@@ -764,9 +764,11 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
             for curso_nome, info in prosseguimento["por_curso"].items():
                 if ce_nome.lower() in curso_nome.lower() or curso_nome.lower() in ce_nome.lower():
                     parts = [f"CE: {info['pct_feup']:.1f}% FEUP"]
+                    n_ref = info['prosseguem_feup']
                     if info.get("pct_up"):
                         parts.append(f"{info['pct_up']:.1f}% U.Porto")
-                    ce_txt = f" ({', '.join(parts)}, {info['prosseguem_feup']}/{info['diplomados']})"
+                        n_ref = info['prosseguem_up']
+                    ce_txt = f" ({', '.join(parts)}, {n_ref}/{info['diplomados']})"
                     break
             else:
                 if ce_individual:
@@ -785,11 +787,12 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
                 f"{feup_pct:.1f}% (N={total} diplomados){ce_txt}"
             )
 
-        # Distribuição por escola de destino (se disponível e com mais que FEUP)
+        # Distribuição de inscrições por escola de destino (com duplicados:
+        # um diplomado inscrito em M em 2 escolas conta nas duas)
         por_escola = prosseguimento.get("por_escola", {})
         if len(por_escola) > 1:
             dist = ", ".join(f"{esc} {n}" for esc, n in por_escola.items())
-            linhas.append(f"  Distribuição por escola de destino (todas as L): {dist}")
+            linhas.append(f"  Inscrições em mestrado por escola de destino (todas as L): {dist}")
 
         # Distribuição do CE em análise
         if ce_nome and prosseguimento.get("por_curso"):
@@ -798,7 +801,7 @@ def formatar_indicadores_prompt(agregados: dict, nivel: str,
                     pe_ce = info.get("por_escola", {})
                     if pe_ce:
                         dist_ce = ", ".join(f"{esc} {n}" for esc, n in pe_ce.items())
-                        linhas.append(f"  Distribuição por escola de destino (CE): {dist_ce}")
+                        linhas.append(f"  Inscrições em mestrado por escola de destino (CE): {dist_ce}")
                     break
 
     return "\n".join(linhas)
