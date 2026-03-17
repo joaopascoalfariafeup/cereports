@@ -2077,6 +2077,13 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 except Exception:
                     pass
 
+            # Sessão para operações de agregação: preferir utilizador, fallback servidor
+            def _get_data_session():
+                try:
+                    return _get_server_session()
+                except Exception:
+                    return sess  # sessão do utilizador
+
             # Fase 1d — prosseguimento L→M (só licenciaturas, pode demorar)
             _prosseguimento = None
             _ce_tipo = None
@@ -2084,12 +2091,11 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                 _ce_tipo = next((c["tipo"] for c in listar_ces_publicos() if c["cur_id"] == job.cur_id), None)
                 if _ce_tipo == "L" and job.cur_id:
                     ano_raw = job.ano_letivo[:4]
-                    _server_sess = _get_server_session()
                     log.iniciar_fase("prosseguimento", "A calcular prosseguimento L→M...")
                     from sigarra_ce import obter_prosseguimento_L_M
                     _ano_concl = str(int(ano_raw) - 1)  # relatório 2024/25 → diplomados 2023/24
                     _prosseguimento = obter_prosseguimento_L_M(
-                        _server_sess, _ano_concl,
+                        _get_data_session(), _ano_concl,
                         progress_cb=lambda msg: log.fase(f"  {msg}"),
                     )
                     if _prosseguimento and _prosseguimento.get("total_diplomados_L"):
@@ -2110,11 +2116,11 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
             try:
                 if _ce_tipo and job.cur_id:
                     ano_raw = job.ano_letivo[:4]
-                    _server_sess = _get_server_session()
+                    _data_sess = _get_data_session()
                     log.iniciar_fase("indicadores", "A obter indicadores comparativos de CEs do mesmo nível...")
                     from indicadores_ce import obter_indicadores_agregados, formatar_indicadores_prompt, extrair_indicadores
                     _agregados = obter_indicadores_agregados(
-                        _server_sess, _ce_tipo, ano_raw,
+                        _data_sess, _ce_tipo, ano_raw,
                         progress_cb=lambda msg: log.info(f"  {msg}"),
                     )
                     if _agregados:
@@ -2124,7 +2130,7 @@ def _run_job(job: Tarefa, sess: SigarraSession, verbosidade: int) -> None:
                             _print_url = PRINT_URL_3C.format(job.pv_id[3:])
                         else:
                             _print_url = PRINT_URL_12C.format(job.pv_id)
-                        _ce_html_raw = _server_sess.fetch_html(_print_url, timeout=30)
+                        _ce_html_raw = _data_sess.fetch_html(_print_url, timeout=30)
                         log.info(f"  CE print HTML: {len(_ce_html_raw)//1024} KB ({_print_url.split('?')[1]})")
                         _ce_ind = extrair_indicadores(_ce_html_raw)
                         log.info(f"  CE indicadores: {_ce_ind}")
