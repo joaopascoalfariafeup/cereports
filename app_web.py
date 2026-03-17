@@ -2519,6 +2519,7 @@ def preview(job_id: str):
     )
 
     # Botão de submissão: qualquer login autenticado; perspetiva CC/CP/CA
+    _submit_disabled = os.environ.get("WEB_DISABLE_SUBMIT", "").strip() == "1"
     _pode_submeter = (
         (job.perspetiva or "").upper() in ("CC", "CP", "CA")
         and bool(job.pv_id)
@@ -2540,12 +2541,20 @@ def preview(job_id: str):
         if _parecer_existente else
         "Confirma a submissão do parecer no SIGARRA?"
     )
-    _btn_submeter = (
-        f'<button type="submit" name="action" value="submeter_sigarra" class="btn"'
-        f' onclick="return confirm({json.dumps(_confirm_msg)});"'
-        f' id="btn-submeter">Submeter no SIGARRA</button>'
-        if _pode_submeter else ""
-    )
+    if _pode_submeter and _submit_disabled:
+        _btn_submeter = (
+            '<button type="submit" name="action" value="submeter_sigarra" class="btn"'
+            ' disabled title="Submissão temporariamente desativada pelo administrador."'
+            ' id="btn-submeter">Submeter no SIGARRA</button>'
+        )
+    elif _pode_submeter:
+        _btn_submeter = (
+            f'<button type="submit" name="action" value="submeter_sigarra" class="btn"'
+            f' onclick="return confirm({json.dumps(_confirm_msg)});"'
+            f' id="btn-submeter">Submeter no SIGARRA</button>'
+        )
+    else:
+        _btn_submeter = ""
 
     body = f"""
     <div class="card">
@@ -2599,6 +2608,11 @@ def download_parecer(job_id: str):
     ce_slug = re.sub(r"[^a-z0-9]+", "-", (job.ce_nome or "ce").lower()).strip("-")
 
     if action == "submeter_sigarra":
+        if os.environ.get("WEB_DISABLE_SUBMIT", "").strip() == "1":
+            return _page("Submissão desativada", """
+            <div class="card">
+              <p class="status-err">A submissão no SIGARRA está temporariamente desativada pelo administrador.</p>
+            </div>"""), 403
         try:
             submeter_parecer_sigarra(sess, job.pv_id, job.perspetiva, parecer_texto)
         except PermissionError as e:
