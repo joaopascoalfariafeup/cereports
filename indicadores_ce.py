@@ -7,7 +7,9 @@ usando rácios de somas (para evitar distorção por cursos pequenos).
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import time
 
@@ -22,8 +24,34 @@ _log = logging.getLogger(__name__)
 # Cache de indicadores agregados por (nivel, ano)
 # ---------------------------------------------------------------------------
 
-_AGREGADOS_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
-_AGREGADOS_TTL = 24 * 3600  # 24 h
+_AGREGADOS_TTL = 30 * 24 * 3600  # 30 dias (dados históricos estáveis)
+_AGREGADOS_CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
+
+
+def _agregados_cache_path(nivel: str, ano: str) -> str:
+    return os.path.join(_AGREGADOS_CACHE_DIR, f"indicadores_{nivel}_{ano}.json")
+
+
+def _agregados_load(nivel: str, ano: str) -> dict | None:
+    """Carrega cache de indicadores do disco, ou None se expirado/inexistente."""
+    path = _agregados_cache_path(nivel, ano)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if time.time() - data.get("_ts", 0) < _AGREGADOS_TTL:
+            return data
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+
+def _agregados_save(nivel: str, ano: str, resultado: dict) -> None:
+    """Guarda cache de indicadores em disco."""
+    os.makedirs(_AGREGADOS_CACHE_DIR, exist_ok=True)
+    resultado["_ts"] = time.time()
+    path = _agregados_cache_path(nivel, ano)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(resultado, f, ensure_ascii=False)
 
 # URLs das versões de impressão
 PRINT_URL_12C = SIGARRA_BASE + "/relcur_geral.proc_edit?pv_id={}&pv_print_ver=S"
@@ -536,14 +564,12 @@ def obter_indicadores_agregados(
         Dict com indicadores agregados ou None se dados insuficientes.
         Resultado em cache durante 24h.
     """
-    cache_key = (nivel.upper(), ano)
-    now = time.time()
-    if cache_key in _AGREGADOS_CACHE:
-        ts, cached = _AGREGADOS_CACHE[cache_key]
-        if now - ts < _AGREGADOS_TTL:
-            if progress_cb:
-                progress_cb(f"Indicadores comparativos ({nivel}) obtidos de cache")
-            return cached
+    nivel_up = nivel.upper()
+    cached = _agregados_load(nivel_up, ano)
+    if cached is not None:
+        if progress_cb:
+            progress_cb(f"Indicadores comparativos ({nivel}) obtidos de cache")
+        return cached
 
     # Listar CEs do mesmo nível
     ces = [c for c in listar_ces_publicos() if c["tipo"] == nivel.upper()]
@@ -574,6 +600,8 @@ def obter_indicadores_agregados(
             html = sess.fetch_html(url, timeout=30)
             ind = extrair_indicadores(html)
             if ind:
+                ind["ce_nome"] = ce.get("nome", "?")
+                ind["cur_id"] = cur_id
                 indicadores_list.append(ind)
         except Exception as e:
             erros += 1
@@ -589,12 +617,13 @@ def obter_indicadores_agregados(
         return None
 
     resultado = _agregar_indicadores(indicadores_list)
+    resultado["por_ce"] = indicadores_list
     if progress_cb:
         ok = len(indicadores_list)
         progress_cb(f"Indicadores comparativos: {ok} cursos agregados"
                     + (f" ({erros} com erros)" if erros else ""))
 
-    _AGREGADOS_CACHE[cache_key] = (now, resultado)
+    _agregados_save(nivel_up, ano, resultado)
     return resultado
 
 
